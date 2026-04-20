@@ -87,8 +87,11 @@
             text-decoration: none;
             font-size: 14px;
         }
-        .back-link:hover {
-            color: #e94560;
+        .back-link:hover { color: #e94560; }
+        .promo-field {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px dashed rgba(255,255,255,0.1);
         }
         @media (max-width: 600px) {
             .member-row { grid-template-columns: 1fr; }
@@ -118,6 +121,11 @@
                     <option value="М">Муж</option>
                     <option value="Ж">Жен</option>
                 </select>
+            </div>
+            
+            <div class="promo-field">
+                <label>🔑 Промокод (если есть)</label>
+                <input type="text" name="promo_code" placeholder="Введите промокод для бесплатной регистрации" style="background: rgba(233,69,96,0.05);">
             </div>
             
             <p class="hint">После оплаты активируйтесь в боте ВК командой /start</p>
