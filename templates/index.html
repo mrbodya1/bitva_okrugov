@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Битва округов — Регистрация</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🏔️ ХМАО — ЯНАО: БИТВА ОКРУГОВ</h1>
+        <p class="subtitle">1 июня – 28 июня 2026</p>
+        
+        <div class="registration-options">
+            <div class="option-card" onclick="window.location.href='{{ url_for('register_team') }}'">
+                <h2>👥 РЕГИСТРАЦИЯ КОМАНДЫ</h2>
+                <p>4 человека, капитан + 3 участника</p>
+                <p class="price">3 960 ₽</p>
+            </div>
+            
+            <div class="option-card" onclick="window.location.href='{{ url_for('register_solo') }}'">
+                <h2>🏃 ИНДИВИДУАЛЬНАЯ РЕГИСТРАЦИЯ</h2>
+                <p>1 человек, распределение в команду</p>
+                <p class="price">990 ₽</p>
+            </div>
+        </div>
+        
+        <div id="limitsInfo" class="limits-info">
+            <!-- Здесь можно динамически подгружать лимиты через JS -->
+        </div>
+    </div>
+</body>
+</html>
