@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация команды — Битва округов</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            color: #c0c0e0;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 15px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        input::placeholder { color: #606080; }
+        select option { background: #1a1a2e; }
+        h3 {
+            color: #fff;
+            margin: 20px 0 12px;
+            font-size: 16px;
+        }
+        .member-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 80px;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .hint {
+            color: #606080;
+            font-size: 11px;
+            margin: 5px 0 12px;
+        }
+        .pay-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #e94560, #c62a47);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .pay-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(233,69,96,0.3);
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #a0a0c0;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-link:hover {
+            color: #e94560;
+        }
+        @media (max-width: 600px) {
+            .member-row { grid-template-columns: 1fr; }
+            .container { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👥 Регистрация команды</h1>
+        
+        <form method="POST" action="{{ url_for('create_team_payment') }}">
+            <div class="form-group">
+                <label>Название команды *</label>
+                <input type="text" name="team_name" placeholder="Например: ХМАО Ястребы" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Округ *</label>
+                <select name="region" required>
+                    <option value="">Выберите округ</option>
+                    <option value="ХМАО">ХМАО (Югра)</option>
+                    <option value="ЯНАО">ЯНАО (Ямал)</option>
+                </select>
+            </div>
+            
+            <h3>👑 Капитан</h3>
+            <div class="member-row">
+                <input type="text" name="cap_first" placeholder="Имя" required>
+                <input type="text" name="cap_last" placeholder="Фамилия" required>
+                <select name="cap_gender" required>
+                    <option value="">Пол</option>
+                    <option value="М">Муж</option>
+                    <option value="Ж">Жен</option>
+                </select>
+            </div>
+            
+            <h3>👤 Участник 2</h3>
+            <div class="member-row">
+                <input type="text" name="m2_first" placeholder="Имя" required>
+                <input type="text" name="m2_last" placeholder="Фамилия" required>
+                <select name="m2_gender" required>
+                    <option value="">Пол</option>
+                    <option value="М">Муж</option>
+                    <option value="Ж">Жен</option>
+                </select>
+            </div>
+            
+            <h3>👤 Участник 3</h3>
+            <div class="member-row">
+                <input type="text" name="m3_first" placeholder="Имя" required>
+                <input type="text" name="m3_last" placeholder="Фамилия" required>
+                <select name="m3_gender" required>
+                    <option value="">Пол</option>
+                    <option value="М">Муж</option>
+                    <option value="Ж">Жен</option>
+                </select>
+            </div>
+            
+            <h3>👤 Участник 4</h3>
+            <div class="member-row">
+                <input type="text" name="m4_first" placeholder="Имя" required>
+                <input type="text" name="m4_last" placeholder="Фамилия" required>
+                <select name="m4_gender" required>
+                    <option value="">Пол</option>
+                    <option value="М">Муж</option>
+                    <option value="Ж">Жен</option>
+                </select>
+            </div>
+            
+            <p class="hint">После оплаты каждый участник должен активироваться в боте ВК командой /start</p>
+            
+            <button type="submit" class="pay-btn">Оплатить 3 960 ₽</button>
+        </form>
+        
+        <a href="{{ url_for('index') }}" class="back-link">← Назад</a>
+    </div>
+</body>
+</html>
