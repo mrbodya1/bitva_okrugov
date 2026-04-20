@@ -6,7 +6,7 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 # VK (замените на свои)
 VK_GROUP_TOKEN = "vk1.a.D4r_yH58-9Hz0a06BugwqUjYF5zk_q8zo_pBGCj0up6SdvVdwX2YT9rfwhlTTrHDD9OVzZx-zYVqiEktaT3ojH1owHKnjHCmfdR7qq4tXGGJ0iXzmjISCAbOvNrg58BOyFJ_vlEHy1PD7vXtBuO_dkru6RSXUFqqeZlag00DUR2l0q-Omx_LI_3FKhgPaTJTpmqom3mycXXKL6Ww4DqReQ"
-VK_CONFIRMATION = "aeeda3b0"
+VK_CONFIRMATION = "11cb9128"
 VK_CALLBACK_SECRET = "cH4ll3ng3_86vs89_K3y"
 
 # Настройки челленджа
