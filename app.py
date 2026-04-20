@@ -44,11 +44,17 @@ def send_vk_message(peer_id, text, keyboard=None):
     }
     if keyboard:
         payload["keyboard"] = json.dumps(keyboard)
+        print(f"📤 Отправка клавиатуры для peer_id={peer_id}")
     
     try:
-        requests.post(url, data=payload)
+        response = requests.post(url, data=payload)
+        result = response.json()
+        if "error" in result:
+            print(f"❌ Ошибка VK API: {result['error']}")
+        else:
+            print(f"✅ Сообщение отправлено")
     except Exception as e:
-        print(f"Ошибка отправки: {e}")
+        print(f"❌ Ошибка отправки: {e}")
 
 # ========== КЛАВИАТУРЫ ==========
 
