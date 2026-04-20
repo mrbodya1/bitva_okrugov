@@ -4,29 +4,129 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Битва округов — Регистрация</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #a0a0c0;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .option-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .option-card {
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+        .option-card:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: #e94560;
+            transform: translateY(-2px);
+        }
+        .option-card h2 {
+            color: #fff;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .option-card p {
+            color: #a0a0c0;
+            margin-bottom: 15px;
+        }
+        .price {
+            color: #e94560 !important;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .limits-info {
+            margin-top: 20px;
+            padding: 14px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            color: #a0a0c0;
+            font-size: 13px;
+            text-align: center;
+        }
+        .limits-info p {
+            margin-bottom: 5px;
+        }
+        @media (max-width: 600px) {
+            .option-cards { grid-template-columns: 1fr; }
+            .container { padding: 20px; }
+        }
+        .vk-link {
+            margin-top: 20px;
+            text-align: center;
+            color: #606080;
+            font-size: 14px;
+        }
+        .vk-link a {
+            color: #e94560;
+            text-decoration: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>🏔️ ХМАО — ЯНАО: БИТВА ОКРУГОВ</h1>
         <p class="subtitle">1 июня – 28 июня 2026</p>
         
-        <div class="registration-options">
-            <div class="option-card" onclick="window.location.href='{{ url_for('register_team') }}'">
-                <h2>👥 РЕГИСТРАЦИЯ КОМАНДЫ</h2>
-                <p>4 человека, капитан + 3 участника</p>
+        <div class="option-cards">
+            <a href="{{ url_for('register_team') }}" class="option-card">
+                <h2>👥 КОМАНДА</h2>
+                <p>4 человека<br>капитан + 3 участника</p>
                 <p class="price">3 960 ₽</p>
-            </div>
+            </a>
             
-            <div class="option-card" onclick="window.location.href='{{ url_for('register_solo') }}'">
-                <h2>🏃 ИНДИВИДУАЛЬНАЯ РЕГИСТРАЦИЯ</h2>
-                <p>1 человек, распределение в команду</p>
+            <a href="{{ url_for('register_solo') }}" class="option-card">
+                <h2>🏃 ОДИНОЧКА</h2>
+                <p>1 человек<br>авто-распределение</p>
                 <p class="price">990 ₽</p>
-            </div>
+            </a>
         </div>
         
-        <div id="limitsInfo" class="limits-info">
-            <!-- Здесь можно динамически подгружать лимиты через JS -->
+        <div class="limits-info">
+            <p>📍 ХМАО: 0 / 100 мест</p>
+            <p>📍 ЯНАО: 0 / 100 мест</p>
+        </div>
+        
+        <div class="vk-link">
+            <p>После регистрации напишите боту ВКонтакте <b>/start</b></p>
+            <p><a href="https://vk.com/club237773393" target="_blank">vk.com/club237773393</a></p>
         </div>
     </div>
 </body>
