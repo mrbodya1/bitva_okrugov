@@ -2,10 +2,13 @@ from flask import Flask, request, render_template, redirect, url_for
 import requests
 import json
 import uuid
+import random
 from datetime import datetime
 import config
 import yookassa
 from yookassa import Payment
+import vk_api
+from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from supabase_client import (
     get_participant_by_vk,
     get_pending_participant_by_name,
@@ -28,55 +31,41 @@ if config.YOOKASSA_SHOP_ID and config.YOOKASSA_SECRET_KEY:
     yookassa.Configuration.account_id = config.YOOKASSA_SHOP_ID
     yookassa.Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
-# Хранилище состояний пользователей (в памяти)
 user_states = {}
 
-# ========== ОТПРАВКА СООБЩЕНИЙ ВК ==========
-
 def send_vk_message(peer_id, text, keyboard=None):
-    url = "https://api.vk.com/method/messages.send"
-    payload = {
-        "peer_id": peer_id,
-        "message": text,
-        "random_id": 0,
-        "v": "5.199",
-        "access_token": config.VK_GROUP_TOKEN
-    }
-    if keyboard:
-        payload["keyboard"] = json.dumps(keyboard)
-        print(f"📤 Отправка клавиатуры для peer_id={peer_id}")
-    
     try:
-        response = requests.post(url, data=payload)
-        result = response.json()
-        if "error" in result:
-            print(f"❌ Ошибка VK API: {result['error']}")
-        else:
-            print(f"✅ Сообщение отправлено")
+        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+        params = {
+            'peer_id': peer_id,
+            'message': text,
+            'random_id': random.randint(1, 2147483647),
+            'from_group': 1
+        }
+        if keyboard:
+            params['keyboard'] = keyboard
+        vk.messages.send(**params)
+        print(f"✅ Сообщение отправлено для peer_id={peer_id}")
+        return True
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
-
-# ========== КЛАВИАТУРЫ ==========
+        return False
 
 def get_main_keyboard():
-    return {
-        "one_time": False,
-        "buttons": [
-            [{"action": {"type": "text", "label": "➕ Добавить тренировку"}, "color": "primary"}],
-            [{"action": {"type": "text", "label": "📊 Моя статистика"}, "color": "primary"},
-             {"action": {"type": "text", "label": "⭐️ Рейтинг"}, "color": "primary"}],
-            [{"action": {"type": "text", "label": "👥 Команды"}, "color": "primary"},
-             {"action": {"type": "text", "label": "📋 Правила"}, "color": "secondary"}]
-        ]
-    }
+    keyboard = VkKeyboard()
+    keyboard.add_button('➕ Добавить тренировку', color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button('📊 Моя статистика', color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button('⭐️ Рейтинг', color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button('👥 Команды', color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button('📋 Правила', color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
 
 def get_cancel_keyboard():
-    return {
-        "one_time": True,
-        "buttons": [
-            [{"action": {"type": "text", "label": "❌ Отмена"}, "color": "secondary"}]
-        ]
-    }
+    keyboard = VkKeyboard()
+    keyboard.add_button('❌ Отмена', color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
 
 # ========== ГЛАВНОЕ МЕНЮ ==========
 
