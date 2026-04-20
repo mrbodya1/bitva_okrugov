@@ -2,6 +2,7 @@ from supabase import create_client, Client
 import config
 from datetime import datetime
 import pytz
+import re
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
@@ -117,6 +118,7 @@ def find_incomplete_team(region):
             .eq("region", region)\
             .eq("is_full", False)\
             .eq("status", "active")\
+            .order("id")\
             .execute()
         return response.data[0] if response.data else None
     except:
@@ -172,6 +174,30 @@ def update_team_member_count(team_id, count, is_full):
         return True
     except:
         return False
+
+def get_next_team_number(region):
+    """Получить следующий порядковый номер для сборной в регионе"""
+    try:
+        response = supabase.table("teams")\
+            .select("name")\
+            .eq("region", region)\
+            .like("name", f"{region} Сборная #%")\
+            .execute()
+        
+        if not response.data:
+            return 1
+        
+        max_num = 0
+        for team in response.data:
+            match = re.search(r'#(\d+)$', team["name"])
+            if match:
+                num = int(match.group(1))
+                if num > max_num:
+                    max_num = num
+        
+        return max_num + 1
+    except:
+        return 1
 
 # ========== ТРЕНИРОВКИ ==========
 
@@ -234,28 +260,35 @@ def get_today_workout(participant_id, day):
 
 def register_team_payment(payment_id, team_name, region, members, amount):
     try:
-        data = {
+        # Сохраняем платёж
+        payment_data = {
             "payment_id": payment_id,
             "type": "team",
             "amount": amount,
             "team_name": team_name,
             "region": region,
             "payer_name": members[0].get("first", "") + " " + members[0].get("last", ""),
-            "data_json": str(members),
-            "status": "pending",
-            "created_at": get_current_date().isoformat()
+            "status": "paid",
+            "created_at": get_current_date().isoformat(),
+            "processed_at": get_current_date().isoformat()
         }
-        supabase.table("payments").insert(data).execute()
+        supabase.table("payments").insert(payment_data).execute()
         
-        # Создаём команду
-        team = create_team(team_name, region)
-        if not team:
-            return None
-        
+        # Создаём команду (сразу полную)
+        team_data = {
+            "name": team_name,
+            "region": region,
+            "member_count": 4,
+            "is_full": True,
+            "status": "active"
+        }
+        team_response = supabase.table("teams").insert(team_data).execute()
+        team = team_response.data[0]
         team_id = team["id"]
         
         # Добавляем участников
         for i, m in enumerate(members):
+            is_captain = (i == 0)
             participant_data = {
                 "vk_id": None,
                 "first_name": m["first"],
@@ -264,51 +297,61 @@ def register_team_payment(payment_id, team_name, region, members, amount):
                 "region": region,
                 "team_id": team_id,
                 "team_name": team_name,
-                "is_captain": (i == 0),
+                "is_captain": is_captain,
+                "total_km": 0,
+                "total_min": 0,
                 "status": "pending",
                 "registered_at": get_current_date().date().isoformat(),
                 "payment_id": payment_id
             }
-            supabase.table("participants").insert(participant_data).execute()
-        
-        supabase.table("payments")\
-            .update({"status": "paid", "processed_at": get_current_date().isoformat()})\
-            .eq("payment_id", payment_id)\
-            .execute()
+            response = supabase.table("participants").insert(participant_data).execute()
+            
+            if is_captain:
+                participant_id = response.data[0]["id"]
+                supabase.table("teams").update({
+                    "captain_id": participant_id,
+                    "captain_name": f"{m['first']} {m['last']}"
+                }).eq("id", team_id).execute()
         
         return team
+        
     except Exception as e:
         print(f"Error registering team: {e}")
         return None
 
 def register_solo_payment(payment_id, region, first_name, last_name, gender, amount):
     try:
-        data = {
+        # Сохраняем платёж
+        payment_data = {
             "payment_id": payment_id,
             "type": "solo",
             "amount": amount,
             "region": region,
             "payer_name": f"{first_name} {last_name}",
-            "status": "pending",
-            "created_at": get_current_date().isoformat()
+            "status": "paid",
+            "created_at": get_current_date().isoformat(),
+            "processed_at": get_current_date().isoformat()
         }
-        supabase.table("payments").insert(data).execute()
+        supabase.table("payments").insert(payment_data).execute()
         
-        # Ищем неполную команду
+        # Ищем неполную команду в этом регионе
         team = find_incomplete_team(region)
         team_id = None
         team_name = None
         is_captain = False
         
         if not team:
-            team = create_team(f"{region} Сборная", region)
-            team_id = team["id"]
-            team_name = team["name"]
+            # Создаём новую команду с уникальным названием
+            team_number = get_next_team_number(region)
+            team_name = f"{region} Сборная #{team_number}"
+            new_team = create_team(team_name, region)
+            team_id = new_team["id"]
             is_captain = True
         else:
             team_id = team["id"]
             team_name = team["name"]
-            # Обновляем количество участников
+            is_captain = False
+            # Увеличиваем счётчик участников
             new_count = team["member_count"] + 1
             is_full = new_count >= 4
             update_team_member_count(team_id, new_count, is_full)
@@ -323,18 +366,25 @@ def register_solo_payment(payment_id, region, first_name, last_name, gender, amo
             "team_id": team_id,
             "team_name": team_name,
             "is_captain": is_captain,
+            "total_km": 0,
+            "total_min": 0,
             "status": "pending",
             "registered_at": get_current_date().date().isoformat(),
             "payment_id": payment_id
         }
-        supabase.table("participants").insert(participant_data).execute()
         
-        supabase.table("payments")\
-            .update({"status": "paid", "processed_at": get_current_date().isoformat()})\
-            .eq("payment_id", payment_id)\
-            .execute()
+        response = supabase.table("participants").insert(participant_data).execute()
+        participant_id = response.data[0]["id"]
+        
+        # Если капитан — обновляем команду
+        if is_captain:
+            supabase.table("teams").update({
+                "captain_id": participant_id,
+                "captain_name": f"{first_name} {last_name}"
+            }).eq("id", team_id).execute()
         
         return {"team_id": team_id, "team_name": team_name}
+        
     except Exception as e:
         print(f"Error registering solo: {e}")
         return None
