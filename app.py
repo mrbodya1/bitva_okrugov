@@ -1,8 +1,11 @@
-from flask import Flask, request
+from flask import Flask, request, render_template, redirect, url_for
 import requests
 import json
+import uuid
 from datetime import datetime
 import config
+import yookassa
+from yookassa import Payment
 from supabase_client import (
     get_participant_by_vk,
     get_pending_participant_by_name,
@@ -14,10 +17,18 @@ from supabase_client import (
     get_team_rating,
     get_current_day,
     get_all_active_participants,
-    get_all_active_teams
+    get_all_active_teams,
+    count_participants_by_region,
+    register_team_payment,
+    register_solo_payment,
+    supabase
 )
 
 app = Flask(__name__)
+
+# Инициализация ЮKassa
+yookassa.Configuration.account_id = config.YOOKASSA_SHOP_ID
+yookassa.Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
 # Хранилище состояний пользователей (в памяти)
 user_states = {}
@@ -70,7 +81,7 @@ def send_main_menu(peer_id, first_name):
     text = f"🏔️ БИТВА ОКРУГОВ\n\nПривет, {first_name}!\nДень {day}\n\nВыберите действие:"
     send_vk_message(peer_id, text, get_main_keyboard())
 
-# ========== ОБРАБОТКА КОМАНД ==========
+# ========== ОБРАБОТКА КОМАНД БОТА ==========
 
 def handle_start(peer_id, user_id):
     participant = get_participant_by_vk(user_id)
@@ -79,7 +90,6 @@ def handle_start(peer_id, user_id):
         send_main_menu(peer_id, participant["first_name"])
         return
     
-    # Проверяем, есть ли ожидающий активации участник
     user_states[user_id] = {"action": "waiting_name"}
     send_vk_message(peer_id, 
         "👋 Добро пожаловать в челлендж «Битва округов»!\n\n"
@@ -215,12 +225,12 @@ def handle_state(user_id, peer_id, text):
         
         if not pending:
             send_vk_message(peer_id, 
-                "❌ Участник не найден. Проверьте правильность имени и фамилии или зарегистрируйтесь на сайте.",
+                "❌ Участник не найден. Проверьте правильность имени и фамилии или зарегистрируйтесь на сайте:\n"
+                f"{request.host_url}",
                 get_cancel_keyboard()
             )
             return True
         
-        # Активируем участника
         activate_participant(pending["id"], user_id)
         del user_states[user_id]
         
@@ -277,7 +287,6 @@ def handle_state(user_id, peer_id, text):
             send_vk_message(peer_id, "❌ Ошибка: участник не найден")
             return True
         
-        # Сохраняем тренировку
         workout = add_workout(
             participant["id"],
             f"{participant['first_name']} {participant['last_name']}",
@@ -307,32 +316,173 @@ def handle_state(user_id, peer_id, text):
     
     return False
 
+# ========== ВЕБ-СТРАНИЦЫ ==========
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/register/team")
+def register_team():
+    return render_template("register_team.html")
+
+@app.route("/register/solo")
+def register_solo():
+    return render_template("register_solo.html")
+
+# ========== СОЗДАНИЕ ПЛАТЕЖЕЙ ==========
+
+@app.route("/create_team_payment", methods=["POST"])
+def create_team_payment():
+    team_name = request.form.get("team_name")
+    region = request.form.get("region")
+    
+    members = [
+        {
+            "first": request.form.get("cap_first"),
+            "last": request.form.get("cap_last"),
+            "gender": request.form.get("cap_gender")
+        },
+        {
+            "first": request.form.get("m2_first"),
+            "last": request.form.get("m2_last"),
+            "gender": request.form.get("m2_gender")
+        },
+        {
+            "first": request.form.get("m3_first"),
+            "last": request.form.get("m3_last"),
+            "gender": request.form.get("m3_gender")
+        },
+        {
+            "first": request.form.get("m4_first"),
+            "last": request.form.get("m4_last"),
+            "gender": request.form.get("m4_gender")
+        }
+    ]
+    
+    # Проверка лимита
+    current_count = count_participants_by_region(region)
+    if current_count + 4 > config.MAX_PER_REGION:
+        return render_template("error.html", 
+            error=f"В округе {region} осталось только {config.MAX_PER_REGION - current_count} мест"
+        )
+    
+    idempotence_key = str(uuid.uuid4())
+    payment = Payment.create({
+        "amount": {
+            "value": f"{config.PRICE_TEAM}.00",
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": url_for('payment_success', _external=True)
+        },
+        "description": f"Регистрация команды {team_name}",
+        "metadata": {
+            "type": "team",
+            "team_name": team_name,
+            "region": region,
+            "members": json.dumps(members)
+        },
+        "capture": True
+    }, idempotence_key)
+    
+    return redirect(payment.confirmation.confirmation_url)
+
+@app.route("/create_solo_payment", methods=["POST"])
+def create_solo_payment():
+    region = request.form.get("region")
+    first_name = request.form.get("first_name")
+    last_name = request.form.get("last_name")
+    gender = request.form.get("gender")
+    
+    # Проверка лимита
+    current_count = count_participants_by_region(region)
+    if current_count >= config.MAX_PER_REGION:
+        return render_template("error.html", 
+            error=f"Регистрация в округе {region} закрыта"
+        )
+    
+    idempotence_key = str(uuid.uuid4())
+    payment = Payment.create({
+        "amount": {
+            "value": f"{config.PRICE_SOLO}.00",
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": url_for('payment_success', _external=True)
+        },
+        "description": f"Индивидуальная регистрация {first_name} {last_name}",
+        "metadata": {
+            "type": "solo",
+            "region": region,
+            "first_name": first_name,
+            "last_name": last_name,
+            "gender": gender
+        },
+        "capture": True
+    }, idempotence_key)
+    
+    return redirect(payment.confirmation.confirmation_url)
+
+@app.route("/payment/success")
+def payment_success():
+    return render_template("success.html")
+
+# ========== WEBHOOK ДЛЯ ЮKASSA ==========
+
+@app.route("/yookassa-webhook", methods=["POST"])
+def yookassa_webhook():
+    event = request.json
+    payment = event.get("object")
+    
+    if event.get("event") == "payment.succeeded":
+        payment_id = payment.get("id")
+        metadata = payment.get("metadata")
+        
+        if metadata.get("type") == "team":
+            members = json.loads(metadata.get("members", "[]"))
+            register_team_payment(
+                payment_id,
+                metadata.get("team_name"),
+                metadata.get("region"),
+                members,
+                config.PRICE_TEAM
+            )
+        elif metadata.get("type") == "solo":
+            register_solo_payment(
+                payment_id,
+                metadata.get("region"),
+                metadata.get("first_name"),
+                metadata.get("last_name"),
+                metadata.get("gender"),
+                config.PRICE_SOLO
+            )
+    
+    return "OK", 200
+
 # ========== ВЕБХУК ДЛЯ ВК ==========
 
-@app.route("/", methods=["POST"])
-def webhook():
+@app.route("/vk-webhook", methods=["POST"])
+def vk_webhook():
     data = request.json
     
-    # Подтверждение сервера
     if data.get("type") == "confirmation":
         return config.VK_CONFIRMATION
     
-    # Обработка сообщений
     if data.get("type") == "message_new":
         msg = data["object"]["message"]
         user_id = msg["from_id"]
         peer_id = msg["peer_id"]
         text = msg.get("text", "").strip()
         
-        # Игнорируем сообщения из чатов
         if peer_id > 2000000000:
             return "ok"
         
-        # Проверяем состояния
         if handle_state(user_id, peer_id, text):
             return "ok"
         
-        # Обработка команд
         if text in ["/start", "меню", "Меню", "начать"]:
             handle_start(peer_id, user_id)
         elif text == "➕ Добавить тренировку":
@@ -345,11 +495,6 @@ def webhook():
             handle_teams(peer_id, user_id)
         elif text == "📋 Правила":
             handle_rules(peer_id)
-        elif text == "/stats":
-            # Отладочная информация
-            participants = get_all_active_participants()
-            teams = get_all_active_teams()
-            send_vk_message(peer_id, f"📊 Статистика челленджа:\n\nУчастников: {len(participants)}\nКоманд: {len(teams)}")
         else:
             participant = get_participant_by_vk(user_id)
             if participant:
