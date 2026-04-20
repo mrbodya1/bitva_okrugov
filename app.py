@@ -16,19 +16,17 @@ from supabase_client import (
     get_rating,
     get_team_rating,
     get_current_day,
-    get_all_active_participants,
-    get_all_active_teams,
     count_participants_by_region,
     register_team_payment,
-    register_solo_payment,
-    supabase
+    register_solo_payment
 )
 
 app = Flask(__name__)
 
 # Инициализация ЮKassa
-yookassa.Configuration.account_id = config.YOOKASSA_SHOP_ID
-yookassa.Configuration.secret_key = config.YOOKASSA_SECRET_KEY
+if config.YOOKASSA_SHOP_ID and config.YOOKASSA_SECRET_KEY:
+    yookassa.Configuration.account_id = config.YOOKASSA_SHOP_ID
+    yookassa.Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
 # Хранилище состояний пользователей (в памяти)
 user_states = {}
@@ -185,8 +183,7 @@ def handle_rules(peer_id):
 ✅ Минимальная дистанция: {config.MIN_KM} км
 ✅ Максимальный темп: {config.MAX_PACE}:00 мин/км
 ✅ Одна тренировка в день
-✅ Бег только на улице (дорожка в зале запрещена)
-✅ Скриншот тренировки обязателен
+✅ Бег только на улице
 
 🏆 Зачёты:
 • Личный — по сумме километров
@@ -211,7 +208,7 @@ def handle_state(user_id, peer_id, text):
             send_vk_message(peer_id, "Действие отменено. Напишите /start для начала.")
         return True
     
-    # Ожидание имени и фамилии для активации
+    # Ожидание имени и фамилии
     if state["action"] == "waiting_name":
         parts = text.split()
         if len(parts) < 2:
@@ -336,29 +333,19 @@ def register_solo():
 def create_team_payment():
     team_name = request.form.get("team_name")
     region = request.form.get("region")
+    promo_code = request.form.get("promo_code", "").strip().upper()
     
     members = [
-        {
-            "first": request.form.get("cap_first"),
-            "last": request.form.get("cap_last"),
-            "gender": request.form.get("cap_gender")
-        },
-        {
-            "first": request.form.get("m2_first"),
-            "last": request.form.get("m2_last"),
-            "gender": request.form.get("m2_gender")
-        },
-        {
-            "first": request.form.get("m3_first"),
-            "last": request.form.get("m3_last"),
-            "gender": request.form.get("m3_gender")
-        },
-        {
-            "first": request.form.get("m4_first"),
-            "last": request.form.get("m4_last"),
-            "gender": request.form.get("m4_gender")
-        }
+        {"first": request.form.get("cap_first"), "last": request.form.get("cap_last"), "gender": request.form.get("cap_gender")},
+        {"first": request.form.get("m2_first"), "last": request.form.get("m2_last"), "gender": request.form.get("m2_gender")},
+        {"first": request.form.get("m3_first"), "last": request.form.get("m3_last"), "gender": request.form.get("m3_gender")},
+        {"first": request.form.get("m4_first"), "last": request.form.get("m4_last"), "gender": request.form.get("m4_gender")}
     ]
+    
+    # Проверка заполнения
+    for i, m in enumerate(members):
+        if not m["first"] or not m["last"] or not m["gender"]:
+            return render_template("error.html", error=f"Участник {i+1}: заполните все поля")
     
     # Проверка лимита
     current_count = count_participants_by_region(region)
@@ -367,23 +354,21 @@ def create_team_payment():
             error=f"В округе {region} осталось только {config.MAX_PER_REGION - current_count} мест"
         )
     
+    # Бесплатная регистрация по промокоду
+    if promo_code == config.SECRET_PROMO_CODE:
+        payment_id = f"promo_{uuid.uuid4()}"
+        register_team_payment(payment_id, team_name, region, members, 0)
+        return render_template("success.html", 
+            message=f"✅ Команда «{team_name}» зарегистрирована БЕСПЛАТНО по промокоду!"
+        )
+    
+    # Платная регистрация
     idempotence_key = str(uuid.uuid4())
     payment = Payment.create({
-        "amount": {
-            "value": f"{config.PRICE_TEAM}.00",
-            "currency": "RUB"
-        },
-        "confirmation": {
-            "type": "redirect",
-            "return_url": url_for('payment_success', _external=True)
-        },
+        "amount": {"value": f"{config.PRICE_TEAM}.00", "currency": "RUB"},
+        "confirmation": {"type": "redirect", "return_url": url_for('payment_success', _external=True)},
         "description": f"Регистрация команды {team_name}",
-        "metadata": {
-            "type": "team",
-            "team_name": team_name,
-            "region": region,
-            "members": json.dumps(members)
-        },
+        "metadata": {"type": "team", "team_name": team_name, "region": region, "members": json.dumps(members)},
         "capture": True
     }, idempotence_key)
     
@@ -395,32 +380,30 @@ def create_solo_payment():
     first_name = request.form.get("first_name")
     last_name = request.form.get("last_name")
     gender = request.form.get("gender")
+    promo_code = request.form.get("promo_code", "").strip().upper()
     
-    # Проверка лимита
+    if not first_name or not last_name or not gender:
+        return render_template("error.html", error="Заполните все поля")
+    
     current_count = count_participants_by_region(region)
     if current_count >= config.MAX_PER_REGION:
-        return render_template("error.html", 
-            error=f"Регистрация в округе {region} закрыта"
+        return render_template("error.html", error=f"Регистрация в округе {region} закрыта")
+    
+    # Бесплатная регистрация по промокоду
+    if promo_code == config.SECRET_PROMO_CODE:
+        payment_id = f"promo_{uuid.uuid4()}"
+        register_solo_payment(payment_id, region, first_name, last_name, gender, 0)
+        return render_template("success.html",
+            message=f"✅ {first_name} {last_name} зарегистрирован БЕСПЛАТНО по промокоду!"
         )
     
+    # Платная регистрация
     idempotence_key = str(uuid.uuid4())
     payment = Payment.create({
-        "amount": {
-            "value": f"{config.PRICE_SOLO}.00",
-            "currency": "RUB"
-        },
-        "confirmation": {
-            "type": "redirect",
-            "return_url": url_for('payment_success', _external=True)
-        },
+        "amount": {"value": f"{config.PRICE_SOLO}.00", "currency": "RUB"},
+        "confirmation": {"type": "redirect", "return_url": url_for('payment_success', _external=True)},
         "description": f"Индивидуальная регистрация {first_name} {last_name}",
-        "metadata": {
-            "type": "solo",
-            "region": region,
-            "first_name": first_name,
-            "last_name": last_name,
-            "gender": gender
-        },
+        "metadata": {"type": "solo", "region": region, "first_name": first_name, "last_name": last_name, "gender": gender},
         "capture": True
     }, idempotence_key)
     
@@ -428,7 +411,7 @@ def create_solo_payment():
 
 @app.route("/payment/success")
 def payment_success():
-    return render_template("success.html")
+    return render_template("success.html", message="Спасибо за регистрацию в челлендже «Битва округов»!")
 
 # ========== WEBHOOK ДЛЯ ЮKASSA ==========
 
@@ -443,22 +426,10 @@ def yookassa_webhook():
         
         if metadata.get("type") == "team":
             members = json.loads(metadata.get("members", "[]"))
-            register_team_payment(
-                payment_id,
-                metadata.get("team_name"),
-                metadata.get("region"),
-                members,
-                config.PRICE_TEAM
-            )
+            register_team_payment(payment_id, metadata.get("team_name"), metadata.get("region"), members, config.PRICE_TEAM)
         elif metadata.get("type") == "solo":
-            register_solo_payment(
-                payment_id,
-                metadata.get("region"),
-                metadata.get("first_name"),
-                metadata.get("last_name"),
-                metadata.get("gender"),
-                config.PRICE_SOLO
-            )
+            register_solo_payment(payment_id, metadata.get("region"), metadata.get("first_name"), 
+                                metadata.get("last_name"), metadata.get("gender"), config.PRICE_SOLO)
     
     return "OK", 200
 
@@ -503,8 +474,6 @@ def vk_webhook():
                 send_vk_message(peer_id, "Напишите /start для начала работы")
     
     return "ok"
-
-# ========== ЗАПУСК ==========
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
