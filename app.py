@@ -37,21 +37,17 @@ user_states = {}
 # ========== ОТПРАВКА СООБЩЕНИЙ ВК ==========
 
 def send_vk_message(user_id, text, keyboard=None):
-    """Отправка сообщения пользователю. user_id = from_id из сообщения"""
     try:
         vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
         params = {
-            'user_id': user_id,  # ← используем user_id вместо peer_id
+            'user_id': user_id,  # ← именно user_id
             'message': text,
             'random_id': random.randint(1, 2147483647),
             'from_group': 1
         }
         if keyboard:
             params['keyboard'] = keyboard
-            print(f"📤 Отправка клавиатуры для user_id={user_id}")
-        
         vk.messages.send(**params)
-        print(f"✅ Сообщение отправлено для user_id={user_id}")
         return True
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
@@ -473,7 +469,7 @@ def vk_webhook():
         # Определяем, чат это или ЛС
         is_chat = peer_id > 2000000000
         
-        # Команда /chatid работает везде
+        # 🔑 Команда /chatid - работает и в ЛС, и в чатах
         if text == '/chatid':
             send_vk_message(user_id, f"Peer ID: {peer_id}")
             return 'ok'
