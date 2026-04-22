@@ -666,6 +666,18 @@ def test_calculate_stage(stage):
     results = calculate_stage_results(stage)
     return jsonify({"count": len(results), "results": results})
 
+@app.route("/test/calculate-semi", methods=["GET", "POST"])
+def test_calculate_semi():
+    """Подсчёт результатов полуфинала"""
+    results = calculate_stage_results("semi")
+    return jsonify({"count": len(results), "results": results})
+
+@app.route("/test/calculate-final", methods=["GET", "POST"])
+def test_calculate_final():
+    """Подсчёт результатов финала"""
+    results = calculate_stage_results("final")
+    return jsonify({"count": len(results), "results": results})
+
 @app.route("/test/notify/<event_key>", methods=["GET", "POST"])
 def test_send_notification(event_key):
     """Универсальный обработчик уведомлений"""
