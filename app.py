@@ -456,20 +456,6 @@ def yookassa_webhook():
 
 # ========== ВЕБХУК ДЛЯ ВК ==========
 
-@app.route("/test-chat")
-def test_chat():
-    try:
-        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
-        vk.messages.send(
-            peer_id=config.VK_CHAT_ID,
-            message="Тестовое сообщение от бота",
-            random_id=0,
-            from_group=1
-        )
-        return "OK"
-    except Exception as e:
-        return f"ERROR: {e}"
-
 @app.route("/vk-webhook", methods=["POST"])
 def vk_webhook():
     data = request.json
@@ -535,7 +521,10 @@ def vk_webhook():
                     
                     # Отправка в общий чат
                     chat_id = config.VK_CHAT_ID
-                    if chat_id:
+                    if is_chat:
+                        if text == '/chatid':
+                            send_message(peer_id, f"Peer ID этого чата: {peer_id}")
+                        return 'ok'
                         chat_msg = (f"✅ ТРЕНИРОВКА ПРИНЯТА\n\n"
                                    f"👤 {participant['first_name']} {participant['last_name']}\n"
                                    f"📍 {participant['region']} | {participant['team_name']}\n"
