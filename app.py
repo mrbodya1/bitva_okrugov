@@ -804,71 +804,109 @@ def test_full_notifications():
         )
         results.append("✅ Топ-4 отправлен")
     
-    # ========== ПОЛУФИНАЛЫ ==========
-    results.append("--- ПОЛУФИНАЛЫ ---")
-    
-    playoff = create_playoff_pairs()
-    calculate_stage_results("semi")
-    matches = get_stage_matches("semi")
-    
-    if matches:
-        formatted = []
-        for m in matches:
-            formatted.append({
-                "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
-                "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
-            })
+        # ========== ПОЛУФИНАЛЫ ==========
+        results.append("--- ПОЛУФИНАЛЫ ---")
         
-        send_match_notification("semi_preliminary", date="24 мая", matches=formatted)
-        send_match_notification("semi_final", date="24 мая", matches=formatted,
-                                final_date="27 мая",
-                                final_team1=matches[0]["team1_name"] if matches[0].get("winner_id") else "?",
-                                final_team2=matches[1]["team1_name"] if matches[1].get("winner_id") else "?",
-                                third_team1=matches[0]["team2_name"] if not matches[0].get("winner_id") else matches[0]["team1_name"],
-                                third_team2=matches[1]["team2_name"] if not matches[1].get("winner_id") else matches[1]["team1_name"],
-                                rating_url="https://bitva-okrugov.onrender.com/rating")
-        results.append("✅ Полуфиналы: уведомления отправлены")
-    
-    # ========== ФИНАЛ ==========
-    results.append("--- ФИНАЛ ---")
-    
-    semi_matches = get_stage_matches("semi")
-    winners = []
-    for m in semi_matches:
-        if m.get("winner_id"):
-            winner = supabase.table("teams").select("id, name").eq("id", m["winner_id"]).execute().data[0]
-            winners.append(winner)
-    
-    if len(winners) >= 2:
-        supabase.table("matches").insert({
-            "stage": "final",
-            "match_date": "2026-05-27",
-            "team1_id": winners[0]["id"],
-            "team1_name": winners[0]["name"],
-            "team2_id": winners[1]["id"],
-            "team2_name": winners[1]["name"],
-            "status": "pending"
-        }).execute()
+        playoff = create_playoff_pairs()
+        calculate_stage_results("semi")
+        matches = get_stage_matches("semi")
         
-        calculate_stage_results("final")
-        final_matches = get_stage_matches("final")
-        
-        if final_matches:
+        if matches and len(matches) >= 2:
             formatted = []
-            for m in final_matches:
+            for m in matches:
                 formatted.append({
                     "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
                     "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
                 })
             
-            winner_team = winners[0]["name"] if final_matches[0].get("winner_id") == winners[0]["id"] else winners[1]["name"]
-            second_team = winners[1]["name"] if winner_team == winners[0]["name"] else winners[0]["name"]
+            send_match_notification("semi_preliminary", date="24 мая", matches=formatted)
             
-            send_match_notification("final_preliminary", date="27 мая", matches=formatted)
-            send_match_notification("final_final", date="27 мая",
-                                    winner=winner_team, second=second_team, third="ХМАО Тайга",
+            # Безопасно получаем победителей
+            final_team1 = "?"
+            final_team2 = "?"
+            third_team1 = "?"
+            third_team2 = "?"
+            
+            if matches[0].get("winner_id"):
+                final_team1 = matches[0]["team1_name"] if matches[0]["winner_id"] == matches[0].get("team1_id") else matches[0]["team2_name"]
+                third_team1 = matches[0]["team2_name"] if matches[0]["winner_id"] == matches[0].get("team1_id") else matches[0]["team1_name"]
+            
+            if len(matches) > 1 and matches[1].get("winner_id"):
+                final_team2 = matches[1]["team1_name"] if matches[1]["winner_id"] == matches[1].get("team1_id") else matches[1]["team2_name"]
+                third_team2 = matches[1]["team2_name"] if matches[1]["winner_id"] == matches[1].get("team1_id") else matches[1]["team1_name"]
+            
+            send_match_notification("semi_final", date="24 мая", matches=formatted,
+                                    final_date="27 мая",
+                                    final_team1=final_team1,
+                                    final_team2=final_team2,
+                                    third_team1=third_team1,
+                                    third_team2=third_team2,
                                     rating_url="https://bitva-okrugov.onrender.com/rating")
-            results.append("✅ Финал: уведомления отправлены")
+            results.append("✅ Полуфиналы: уведомления отправлены")
+        else:
+            results.append("⚠️ Полуфиналы: недостаточно матчей")
+    
+        # ========== ФИНАЛ ==========
+        results.append("--- ФИНАЛ ---")
+        
+        semi_matches = get_stage_matches("semi")
+        winners = []
+        for m in semi_matches:
+            if m.get("winner_id"):
+                winner_id = m["winner_id"]
+                # Определяем, какая команда победила
+                if winner_id == m.get("team1_id"):
+                    winners.append({"id": m["team1_id"], "name": m["team1_name"]})
+                else:
+                    winners.append({"id": m["team2_id"], "name": m["team2_name"]})
+        
+        if len(winners) >= 2:
+            supabase.table("matches").insert({
+                "stage": "final",
+                "match_date": "2026-05-27",
+                "team1_id": winners[0]["id"],
+                "team1_name": winners[0]["name"],
+                "team2_id": winners[1]["id"],
+                "team2_name": winners[1]["name"],
+                "status": "pending"
+            }).execute()
+            
+            calculate_stage_results("final")
+            final_matches = get_stage_matches("final")
+            
+            if final_matches and len(final_matches) > 0:
+                m = final_matches[0]
+                formatted = [{
+                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
+                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
+                }]
+                
+                # Определяем победителя
+                if m.get("winner_id"):
+                    winner_team = m["team1_name"] if m["winner_id"] == m.get("team1_id") else m["team2_name"]
+                    second_team = m["team2_name"] if m["winner_id"] == m.get("team1_id") else m["team1_name"]
+                else:
+                    winner_team = winners[0]["name"]
+                    second_team = winners[1]["name"]
+                
+                # Получаем третье место из полуфиналов
+                third_team = "?"
+                for sm in semi_matches:
+                    if sm.get("winner_id"):
+                        loser = sm["team2_name"] if sm["winner_id"] == sm.get("team1_id") else sm["team1_name"]
+                        if loser != winner_team and loser != second_team:
+                            third_team = loser
+                            break
+                
+                send_match_notification("final_preliminary", date="27 мая", matches=formatted)
+                send_match_notification("final_final", date="27 мая",
+                                        winner=winner_team, second=second_team, third=third_team,
+                                        rating_url="https://bitva-okrugov.onrender.com/rating")
+                results.append("✅ Финал: уведомления отправлены")
+            else:
+                results.append("⚠️ Финал: нет матчей")
+        else:
+            results.append(f"⚠️ Финал: недостаточно победителей полуфиналов (найдено {len(winners)})")
     
     return jsonify(results)
 
