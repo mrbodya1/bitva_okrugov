@@ -472,20 +472,30 @@ def vk_webhook():
         # Определяем, чат это или ЛС
         is_chat = peer_id > 2000000000
         
-        # 🔑 Команда /chatid - работает и в ЛС, и в чатах
+        # 🔑 Команда /chatid
         if text == '/chatid':
-            print(f"🔍 Получена команда /chatid от user_id={user_id}, peer_id={peer_id}")
+            print(f"🔍 /chatid от user_id={user_id}, peer_id={peer_id}, is_chat={is_chat}")
             try:
                 vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
-                vk.messages.send(
-                    peer_id=peer_id,  # ← отправляем в тот же чат
-                    message=f"Peer ID этого чата: {peer_id}",
-                    random_id=random.randint(1, 2147483647),
-                    from_group=1
-                )
-                print(f"✅ Ответ отправлен в чат {peer_id}")
+                if is_chat:
+                    # Отвечаем в чат
+                    vk.messages.send(
+                        peer_id=peer_id,
+                        message=f"Peer ID этого чата: {peer_id}",
+                        random_id=random.randint(1, 2147483647),
+                        from_group=1
+                    )
+                else:
+                    # Отвечаем в ЛС
+                    vk.messages.send(
+                        user_id=user_id,
+                        message=f"Ваш Peer ID: {peer_id}",
+                        random_id=random.randint(1, 2147483647),
+                        from_group=1
+                    )
+                print(f"✅ Ответ отправлен")
             except Exception as e:
-                print(f"❌ Ошибка отправки в чат: {e}")
+                print(f"❌ Ошибка: {e}")
             return 'ok'
         
         # Игнорируем остальные команды из чатов
