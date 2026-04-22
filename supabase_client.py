@@ -3,6 +3,7 @@ import config
 from datetime import datetime
 import pytz
 import re
+import random
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
@@ -223,7 +224,6 @@ def add_workout(participant_id, participant_name, team_id, team_name, region, di
         
         response = supabase.table("workouts").insert(data).execute()
         
-        # Обновляем статистику
         update_participant_stats(participant_id, distance, duration)
         update_team_stats(team_id, distance, duration)
         
@@ -260,7 +260,6 @@ def get_today_workout(participant_id, day):
 
 def register_team_payment(payment_id, team_name, region, members, amount):
     try:
-        # Сохраняем платёж
         payment_data = {
             "payment_id": payment_id,
             "type": "team",
@@ -274,7 +273,6 @@ def register_team_payment(payment_id, team_name, region, members, amount):
         }
         supabase.table("payments").insert(payment_data).execute()
         
-        # Создаём команду (сразу полную)
         team_data = {
             "name": team_name,
             "region": region,
@@ -286,7 +284,6 @@ def register_team_payment(payment_id, team_name, region, members, amount):
         team = team_response.data[0]
         team_id = team["id"]
         
-        # Добавляем участников
         for i, m in enumerate(members):
             is_captain = (i == 0)
             participant_data = {
@@ -321,7 +318,6 @@ def register_team_payment(payment_id, team_name, region, members, amount):
 
 def register_solo_payment(payment_id, region, first_name, last_name, gender, amount):
     try:
-        # Сохраняем платёж
         payment_data = {
             "payment_id": payment_id,
             "type": "solo",
@@ -334,14 +330,12 @@ def register_solo_payment(payment_id, region, first_name, last_name, gender, amo
         }
         supabase.table("payments").insert(payment_data).execute()
         
-        # Ищем неполную команду в этом регионе
         team = find_incomplete_team(region)
         team_id = None
         team_name = None
         is_captain = False
         
         if not team:
-            # Создаём новую команду с уникальным названием
             team_number = get_next_team_number(region)
             team_name = f"{region} Сборная #{team_number}"
             new_team = create_team(team_name, region)
@@ -351,12 +345,10 @@ def register_solo_payment(payment_id, region, first_name, last_name, gender, amo
             team_id = team["id"]
             team_name = team["name"]
             is_captain = False
-            # Увеличиваем счётчик участников
             new_count = team["member_count"] + 1
             is_full = new_count >= 4
             update_team_member_count(team_id, new_count, is_full)
         
-        # Добавляем участника
         participant_data = {
             "vk_id": None,
             "first_name": first_name,
@@ -376,7 +368,6 @@ def register_solo_payment(payment_id, region, first_name, last_name, gender, amo
         response = supabase.table("participants").insert(participant_data).execute()
         participant_id = response.data[0]["id"]
         
-        # Если капитан — обновляем команду
         if is_captain:
             supabase.table("teams").update({
                 "captain_id": participant_id,
@@ -449,3 +440,269 @@ def get_team_rating():
     teams = get_all_active_teams()
     teams.sort(key=lambda x: (x.get("points", 0) or 0, x.get("total_km", 0) or 0), reverse=True)
     return teams[:25]
+
+# ========== УВЕДОМЛЕНИЯ ==========
+
+def get_notification_template(event_key):
+    try:
+        response = supabase.table("notifications")\
+            .select("*")\
+            .eq("event_key", event_key)\
+            .eq("is_active", True)\
+            .execute()
+        return response.data[0] if response.data else None
+    except:
+        return None
+
+# ========== ЖЕРЕБЬЁВКА ==========
+
+def get_teams_warmup_stats():
+    """Получить статистику команд за разминку"""
+    teams = get_all_active_teams()
+    
+    warmup_stats = []
+    for team in teams:
+        stats = supabase.table("workouts")\
+            .select("final_km, final_min")\
+            .eq("team_id", team["id"])\
+            .eq("status", "verified")\
+            .execute()
+        
+        total_km = sum(w["final_km"] for w in stats.data) if stats.data else 0
+        total_min = sum(w["final_min"] for w in stats.data) if stats.data else 0
+        
+        warmup_stats.append({
+            "id": team["id"],
+            "name": team["name"],
+            "region": team["region"],
+            "total_km": total_km,
+            "total_min": total_min
+        })
+    
+    warmup_stats.sort(key=lambda x: x["total_km"], reverse=True)
+    return warmup_stats
+
+def create_stage_pairs(stage):
+    """Создать пары для этапа"""
+    
+    calendar = supabase.table("calendar")\
+        .select("stage_date")\
+        .eq("stage", stage)\
+        .execute()
+    
+    if not calendar.data:
+        return None
+    
+    match_date = calendar.data[0]["stage_date"]
+    
+    if stage == 1:
+        teams = get_teams_warmup_stats()
+    else:
+        teams = supabase.table("teams")\
+            .select("*")\
+            .eq("status", "active")\
+            .order("points", desc=True)\
+            .order("wins", desc=True)\
+            .order("total_km", desc=True)\
+            .execute().data
+    
+    if len(teams) < 2:
+        return None
+    
+    pairs = []
+    if stage == 1:
+        mid = len(teams) // 2
+        basket_a = teams[:mid]
+        basket_b = teams[mid:]
+        random.shuffle(basket_a)
+        random.shuffle(basket_b)
+        for ta, tb in zip(basket_a, basket_b):
+            pairs.append({"team1": ta, "team2": tb})
+    else:
+        for i in range(0, len(teams), 2):
+            if i + 1 < len(teams):
+                pairs.append({"team1": teams[i], "team2": teams[i+1]})
+    
+    for pair in pairs:
+        supabase.table("matches").insert({
+            "stage": stage,
+            "match_date": match_date,
+            "team1_id": pair["team1"]["id"],
+            "team1_name": pair["team1"]["name"],
+            "team2_id": pair["team2"]["id"],
+            "team2_name": pair["team2"]["name"],
+            "status": "pending"
+        }).execute()
+    
+    return {"count": len(pairs), "date": match_date}
+
+def create_playoff_pairs():
+    """Создать пары для полуфиналов (топ-4)"""
+    top4 = supabase.table("teams")\
+        .select("*")\
+        .eq("status", "active")\
+        .order("points", desc=True)\
+        .order("wins", desc=True)\
+        .order("total_km", desc=True)\
+        .limit(4)\
+        .execute().data
+    
+    if len(top4) < 4:
+        return None
+    
+    calendar = supabase.table("calendar")\
+        .select("stage_date")\
+        .eq("stage", 8)\
+        .execute()
+    
+    if not calendar.data:
+        return None
+    
+    match_date = calendar.data[0]["stage_date"]
+    
+    semi_pairs = [
+        {"team1": top4[0], "team2": top4[3]},
+        {"team1": top4[1], "team2": top4[2]}
+    ]
+    
+    for pair in semi_pairs:
+        supabase.table("matches").insert({
+            "stage": "semi",
+            "match_date": match_date,
+            "team1_id": pair["team1"]["id"],
+            "team1_name": pair["team1"]["name"],
+            "team2_id": pair["team2"]["id"],
+            "team2_name": pair["team2"]["name"],
+            "status": "pending"
+        }).execute()
+    
+    return {"count": 2, "date": match_date, "top4": top4}
+
+def create_final_pairs(semi_winners):
+    """Создать финальные пары"""
+    if len(semi_winners) < 2:
+        return None
+    
+    calendar = supabase.table("calendar")\
+        .select("stage_date")\
+        .eq("stage", 9)\
+        .execute()
+    
+    if not calendar.data:
+        return None
+    
+    match_date = calendar.data[0]["stage_date"]
+    
+    supabase.table("matches").insert({
+        "stage": "final",
+        "match_date": match_date,
+        "team1_id": semi_winners[0]["id"],
+        "team1_name": semi_winners[0]["name"],
+        "team2_id": semi_winners[1]["id"],
+        "team2_name": semi_winners[1]["name"],
+        "status": "pending"
+    }).execute()
+    
+    return {"date": match_date}
+
+# ========== ПОДСЧЁТ РЕЗУЛЬТАТОВ ==========
+
+def calculate_stage_results(stage):
+    """Подсчитать результаты этапа"""
+    
+    matches = supabase.table("matches")\
+        .select("*")\
+        .eq("stage", stage)\
+        .eq("status", "pending")\
+        .execute().data
+    
+    results = []
+    for m in matches:
+        team1_stats = supabase.table("workouts")\
+            .select("final_km, final_min")\
+            .eq("team_id", m["team1_id"])\
+            .eq("workout_date", m["match_date"])\
+            .eq("status", "verified")\
+            .execute()
+        
+        team2_stats = supabase.table("workouts")\
+            .select("final_km, final_min")\
+            .eq("team_id", m["team2_id"])\
+            .eq("workout_date", m["match_date"])\
+            .eq("status", "verified")\
+            .execute()
+        
+        team1_km = sum(w["final_km"] for w in team1_stats.data) if team1_stats.data else 0
+        team1_time = sum(w["final_min"] for w in team1_stats.data) if team1_stats.data else 0
+        team2_km = sum(w["final_km"] for w in team2_stats.data) if team2_stats.data else 0
+        team2_time = sum(w["final_min"] for w in team2_stats.data) if team2_stats.data else 0
+        
+        if team1_km > team2_km:
+            winner_id = m["team1_id"]
+        elif team2_km > team1_km:
+            winner_id = m["team2_id"]
+        else:
+            winner_id = m["team1_id"] if team1_time < team2_time else m["team2_id"]
+        
+        supabase.table("matches").update({
+            "team1_km": team1_km,
+            "team2_km": team2_km,
+            "team1_time": team1_time,
+            "team2_time": team2_time,
+            "winner_id": winner_id,
+            "status": "completed"
+        }).eq("id", m["id"]).execute()
+        
+        try:
+            if winner_id == m["team1_id"]:
+                supabase.rpc('increment_team_points', {'team_id': m["team1_id"], 'is_win': True}).execute()
+                supabase.rpc('increment_team_points', {'team_id': m["team2_id"], 'is_win': False}).execute()
+            else:
+                supabase.rpc('increment_team_points', {'team_id': m["team2_id"], 'is_win': True}).execute()
+                supabase.rpc('increment_team_points', {'team_id': m["team1_id"], 'is_win': False}).execute()
+        except:
+            # Fallback если RPC не работает
+            if winner_id == m["team1_id"]:
+                supabase.table("teams").update({"points": supabase.raw("points + 1"), "wins": supabase.raw("wins + 1")}).eq("id", m["team1_id"]).execute()
+                supabase.table("teams").update({"losses": supabase.raw("losses + 1")}).eq("id", m["team2_id"]).execute()
+            else:
+                supabase.table("teams").update({"points": supabase.raw("points + 1"), "wins": supabase.raw("wins + 1")}).eq("id", m["team2_id"]).execute()
+                supabase.table("teams").update({"losses": supabase.raw("losses + 1")}).eq("id", m["team1_id"]).execute()
+        
+        results.append({
+            "team1_name": m["team1_name"],
+            "team1_km": team1_km,
+            "team1_time": team1_time,
+            "team2_name": m["team2_name"],
+            "team2_km": team2_km,
+            "team2_time": team2_time
+        })
+    
+    return results
+
+def get_stage_matches(stage):
+    """Получить все матчи этапа"""
+    try:
+        response = supabase.table("matches")\
+            .select("*")\
+            .eq("stage", stage)\
+            .order("id")\
+            .execute()
+        return response.data if response.data else []
+    except:
+        return []
+
+def get_top4_teams():
+    """Получить топ-4 команды"""
+    try:
+        response = supabase.table("teams")\
+            .select("*")\
+            .eq("status", "active")\
+            .order("points", desc=True)\
+            .order("wins", desc=True)\
+            .order("total_km", desc=True)\
+            .limit(4)\
+            .execute()
+        return response.data if response.data else []
+    except:
+        return []
