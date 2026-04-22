@@ -40,14 +40,17 @@ def send_vk_message(user_id, text, keyboard=None):
     try:
         vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
         params = {
-            'user_id': user_id,  # ← именно user_id
+            'user_id': user_id,  # ← для ЛС
             'message': text,
             'random_id': random.randint(1, 2147483647),
             'from_group': 1
         }
         if keyboard:
             params['keyboard'] = keyboard
+        
+        print(f"📤 Отправка сообщения для user_id={user_id}: {text[:50]}...")
         vk.messages.send(**params)
+        print(f"✅ Сообщение отправлено")
         return True
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
@@ -471,7 +474,18 @@ def vk_webhook():
         
         # 🔑 Команда /chatid - работает и в ЛС, и в чатах
         if text == '/chatid':
-            send_vk_message(user_id, f"Peer ID: {peer_id}")
+            print(f"🔍 Получена команда /chatid от user_id={user_id}, peer_id={peer_id}")
+            try:
+                vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+                vk.messages.send(
+                    peer_id=peer_id,  # ← отправляем в тот же чат
+                    message=f"Peer ID этого чата: {peer_id}",
+                    random_id=random.randint(1, 2147483647),
+                    from_group=1
+                )
+                print(f"✅ Ответ отправлен в чат {peer_id}")
+            except Exception as e:
+                print(f"❌ Ошибка отправки в чат: {e}")
             return 'ok'
         
         # Игнорируем остальные команды из чатов
