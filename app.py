@@ -456,6 +456,20 @@ def yookassa_webhook():
 
 # ========== ВЕБХУК ДЛЯ ВК ==========
 
+@app.route("/test-chat")
+def test_chat():
+    try:
+        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+        vk.messages.send(
+            peer_id=config.VK_CHAT_ID,
+            message="Тестовое сообщение от бота",
+            random_id=0,
+            from_group=1
+        )
+        return "OK"
+    except Exception as e:
+        return f"ERROR: {e}"
+
 @app.route("/vk-webhook", methods=["POST"])
 def vk_webhook():
     data = request.json
