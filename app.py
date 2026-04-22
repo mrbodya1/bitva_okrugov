@@ -647,26 +647,26 @@ def vk_webhook():
 
 # ========== ТЕСТОВЫЕ МАРШРУТЫ ==========
 
-@app.route("/test/create-pairs/<int:stage>")
+@app.route("/test/create-pairs/<int:stage>", methods=["GET", "POST"])
 def test_create_pairs(stage):
     result = create_stage_pairs(stage)
     if result:
         return f"✅ Создано {result['count']} пар для этапа {stage} (дата: {result['date']})"
     return "❌ Ошибка создания пар"
 
-@app.route("/test/create-playoff")
+@app.route("/test/create-playoff", methods=["GET", "POST"])
 def test_create_playoff():
     result = create_playoff_pairs()
     if result:
         return f"✅ Создано {result['count']} пар для полуфиналов"
     return "❌ Ошибка создания пар"
 
-@app.route("/test/calculate/<int:stage>")
+@app.route("/test/calculate/<int:stage>", methods=["GET", "POST"])
 def test_calculate_stage(stage):
     results = calculate_stage_results(stage)
     return jsonify({"count": len(results), "results": results})
 
-@app.route("/test/notify/<event_key>")
+@app.route("/test/notify/<event_key>", methods=["GET", "POST"])
 def test_send_notification(event_key):
     if event_key == "stage_pairing":
         matches = get_stage_matches(1)
@@ -712,7 +712,7 @@ def test_send_notification(event_key):
     
     return f"❌ Неизвестный event_key: {event_key}"
 
-@app.route("/test/cleanup")
+@app.route("/test/cleanup", methods=["GET", "POST"])
 def test_cleanup():
     try:
         supabase.table("participants").delete().like("first_name", "Тест%").execute()
@@ -723,7 +723,7 @@ def test_cleanup():
     except Exception as e:
         return f"❌ Ошибка: {e}"
 
-@app.route("/test/full-notifications")
+@app.route("/test/full-notifications", methods=["GET", "POST"])
 def test_full_notifications():
     """Полный прогон всех уведомлений от жеребьёвки до финала"""
     results = []
