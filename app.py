@@ -735,6 +735,54 @@ def test_full_run():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+@app.route("/test/full-challenge")
+def test_full_challenge():
+    """Полный прогон всех 7 этапов + плей-офф"""
+    results = []
+    
+    # Этапы 1-7
+    for stage in range(1, 8):
+        pairs = create_stage_pairs(stage)
+        if pairs:
+            results.append(f"Этап {stage}: создано {pairs['count']} пар")
+        
+        calc = calculate_stage_results(stage)
+        results.append(f"Этап {stage}: подсчитано {len(calc)} матчей")
+    
+    # Полуфиналы
+    playoff = create_playoff_pairs()
+    if playoff:
+        results.append(f"Полуфиналы: создано {playoff['count']} пар")
+    
+    calc_semi = calculate_stage_results("semi")
+    results.append(f"Полуфиналы: подсчитано {len(calc_semi)} матчей")
+    
+    # Определяем победителей полуфиналов
+    semi_matches = get_stage_matches("semi")
+    winners = []
+    for m in semi_matches:
+        if m.get("winner_id"):
+            winner = supabase.table("teams").select("id, name").eq("id", m["winner_id"]).execute().data[0]
+            winners.append(winner)
+    
+    # Финал
+    if len(winners) >= 2:
+        supabase.table("matches").insert({
+            "stage": "final",
+            "match_date": "2026-05-27",
+            "team1_id": winners[0]["id"],
+            "team1_name": winners[0]["name"],
+            "team2_id": winners[1]["id"],
+            "team2_name": winners[1]["name"],
+            "status": "pending"
+        }).execute()
+        results.append("Финал: создана пара")
+    
+    calc_final = calculate_stage_results("final")
+    results.append(f"Финал: подсчитано {len(calc_final)} матчей")
+    
+    return jsonify(results)
+
 # ========== ЗАПУСК ==========
 
 if __name__ == "__main__":
