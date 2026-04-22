@@ -380,6 +380,8 @@ def send_match_notification(event_key, stage=None, date=None, matches=None, **kw
     # Подвал
     if template.get("footer"):
         footer = template["footer"]
+        # Заменяем литерал \n на реальный перенос строки
+        footer = footer.replace('\\n', '\n')
         for key, value in kwargs.items():
             if value is not None:
                 footer = footer.replace(f"{{{key}}}", str(value))
