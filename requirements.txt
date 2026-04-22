@@ -8,3 +8,4 @@ httpx==0.27.2
 httpcore==1.0.7
 yookassa==3.1.0
 vk-api==11.9.9
+pip==26.0.1
