@@ -455,52 +455,42 @@ def yookassa_webhook():
 
 # ========== ВЕБХУК ДЛЯ ВК ==========
 
-@app.route("/vk-webhook", methods=["POST"])
-def vk_webhook():
-    data = request.json
-    
-    if data.get("type") == "confirmation":
-        return config.VK_CONFIRMATION
-    
-    if data.get("type") == "message_new":
-        msg = data["object"]["message"]
-        user_id = msg["from_id"]
-        peer_id = msg["peer_id"]
-        text = msg.get("text", "").strip()
-        attachments = msg.get("attachments", [])
-        
-        # Определяем, чат это или ЛС
-        is_chat = peer_id > 2000000000
-        
-        # 🔑 Команда /chatid
-        if text == '/chatid':
-            print(f"🔍 /chatid от user_id={user_id}, peer_id={peer_id}, is_chat={is_chat}")
-            try:
-                vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+@app.route('/', methods=['POST'])
+def webhook():
+    try:
+        data = request.json
+        if data.get('type') == 'confirmation':
+            return CONFIRMATION_TOKEN
+
+        if data.get('type') == 'message_new':
+            msg = data['object']['message']
+            user_id = msg['from_id']
+            peer_id = msg['peer_id']
+            raw_text = msg.get('text', '').strip()
+            text = clean_text(raw_text)
+
+            # Определяем, чат это или ЛС
+            is_chat = peer_id > 2000000000
+
+            # 🔑 Команда /chatid — работает и в ЛС, и в чате
+            if text == '/chatid':
+                print(f"🔍 Обнаружена команда /chatid, is_chat={is_chat}")
+                
                 if is_chat:
-                    # Отвечаем в чат
-                    vk.messages.send(
-                        peer_id=peer_id,
-                        message=f"Peer ID этого чата: {peer_id}",
-                        random_id=random.randint(1, 2147483647),
-                        from_group=1
-                    )
+                    # Отвечаем прямо в чат
+                    send_message(peer_id, f"💬 Peer ID этого чата: {peer_id}")
+                    # И дублируем в ЛС для надёжности
+                    send_message(user_id, f"📋 Peer ID чата: {peer_id}\n\nСохрани это значение в .env как VK_CHAT_ID")
                 else:
                     # Отвечаем в ЛС
-                    vk.messages.send(
-                        user_id=user_id,
-                        message=f"Ваш Peer ID: {peer_id}",
-                        random_id=random.randint(1, 2147483647),
-                        from_group=1
-                    )
-                print(f"✅ Ответ отправлен")
-            except Exception as e:
-                print(f"❌ Ошибка: {e}")
-            return 'ok'
-        
-        # Игнорируем остальные команды из чатов
-        if is_chat:
-            return 'ok'
+                    send_message(user_id, f"📋 Ваш Peer ID: {peer_id} (это личные сообщения)")
+                
+                print(f"✅ Ответ на /chatid отправлен")
+                return 'ok'
+
+            # Если сообщение из чата и это не команда — игнорируем
+            if is_chat:
+                return 'ok'
         
         # Проверяем, есть ли фото и ждём ли мы скриншот
         state = user_states.get(user_id)
