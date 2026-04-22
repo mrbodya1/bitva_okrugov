@@ -37,23 +37,57 @@ user_states = {}
 # ========== ОТПРАВКА СООБЩЕНИЙ ВК ==========
 
 def send_vk_message(user_id, text, keyboard=None):
+    """Отправка сообщения пользователю в ЛС"""
     try:
         vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
         params = {
-            'user_id': user_id,  # ← для ЛС
+            'user_id': user_id,
             'message': text,
             'random_id': random.randint(1, 2147483647),
             'from_group': 1
         }
         if keyboard:
             params['keyboard'] = keyboard
+            print(f"📤 Отправка клавиатуры для user_id={user_id}")
         
-        print(f"📤 Отправка сообщения для user_id={user_id}: {text[:50]}...")
         vk.messages.send(**params)
-        print(f"✅ Сообщение отправлено")
+        print(f"✅ Сообщение отправлено в ЛС для user_id={user_id}")
         return True
     except Exception as e:
-        print(f"❌ Ошибка отправки: {e}")
+        print(f"❌ Ошибка отправки в ЛС: {e}")
+        return False
+
+def send_to_chat_with_photo(chat_id, message, photo_attachment):
+    """Отправка сообщения с фото в общий чат"""
+    try:
+        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+        vk.messages.send(
+            peer_id=chat_id,
+            message=message,
+            attachment=photo_attachment,
+            random_id=random.randint(1, 2147483647),
+            from_group=1
+        )
+        print(f"✅ Скриншот отправлен в чат {chat_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка отправки в чат: {e}")
+        return False
+
+def send_to_chat_text(chat_id, message):
+    """Отправка текстового сообщения в общий чат"""
+    try:
+        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+        vk.messages.send(
+            peer_id=chat_id,
+            message=message,
+            random_id=random.randint(1, 2147483647),
+            from_group=1
+        )
+        print(f"✅ Текст отправлен в чат {chat_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка отправки текста в чат: {e}")
         return False
 
 # ========== КЛАВИАТУРЫ ==========
@@ -290,54 +324,8 @@ def handle_state(user_id, text):
             get_cancel_keyboard()
         )
         return True
-        
-        workout = add_workout(
-            participant["id"],
-            f"{participant['first_name']} {participant['last_name']}",
-            participant["team_id"],
-            participant["team_name"],
-            participant["region"],
-            distance,
-            duration
-        )
-        
-        del user_states[user_id]
-        
-        if workout:
-            day = get_current_day()
-            send_vk_message(user_id,
-                f"✅ Тренировка добавлена!\n\n"
-                f"📅 День {day}\n"
-                f"📏 Дистанция: {distance} км\n"
-                f"⏱ Время: {duration} мин\n"
-                f"⚡ Темп: {pace:.2f} мин/км"
-            )
-        else:
-            send_vk_message(user_id, "❌ Ошибка при сохранении тренировки")
-        
-        send_main_menu(user_id, participant["first_name"])
-        return True
     
     return False
-
-# ========== ОТПРАВКА В ЧАТ С ФОТО ==========
-
-def send_to_chat_with_photo(chat_id, message, photo_attachment):
-    """Отправка сообщения с фото в общий чат"""
-    try:
-        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
-        vk.messages.send(
-            peer_id=chat_id,
-            message=message,
-            attachment=photo_attachment,
-            random_id=random.randint(1, 2147483647),
-            from_group=1
-        )
-        print(f"✅ Скриншот отправлен в чат {chat_id}")
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка отправки в чат: {e}")
-        return False
 
 # ========== ВЕБ-СТРАНИЦЫ ==========
 
@@ -460,6 +448,7 @@ def vk_webhook():
     data = request.json
     
     if data.get("type") == "confirmation":
+        print(f"🔐 Подтверждение сервера")
         return config.VK_CONFIRMATION
     
     if data.get("type") == "message_new":
@@ -467,39 +456,38 @@ def vk_webhook():
         user_id = msg["from_id"]
         peer_id = msg["peer_id"]
         text = msg.get("text", "").strip()
+        attachments = msg.get("attachments", [])
         
-        # 🔥 САМАЯ ПЕРВАЯ ПРОВЕРКА - логируем ВСЁ
         print(f"📨 СООБЩЕНИЕ: user={user_id}, peer={peer_id}, text='{text}'")
         
-        # 🔑 Обработка /chatid ДО ВСЕХ ОСТАЛЬНЫХ ПРОВЕРОК
-        if text == '/chatid':
-            print(f"🔍 КОМАНДА /chatid ОБНАРУЖЕНА!")
+        # 🔑 ПРОВЕРКА chatid ДО ВСЕГО (и в чате, и в ЛС)
+        if text in ['/chatid', '/chat_id', 'chatid', 'chat_id']:
+            print(f"🔍 КОМАНДА chatid ОБНАРУЖЕНА!")
             try:
                 vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
                 vk.messages.send(
                     user_id=user_id,
-                    message=f"Peer ID: {peer_id}",
+                    message=f"📋 Peer ID: {peer_id}",
                     random_id=random.randint(1, 2147483647),
                     from_group=1
                 )
-                print(f"✅ Ответ отправлен в ЛС")
+                print(f"✅ Peer ID {peer_id} отправлен в ЛС")
             except Exception as e:
-                print(f"❌ Ошибка: {e}")
+                print(f"❌ Ошибка отправки chatid: {e}")
             return 'ok'
         
-        # Только потом проверяем чат/ЛС
+        # Проверяем, чат это или ЛС
         is_chat = peer_id > 2000000000
+        
+        # Игнорируем все остальные сообщения из чатов
         if is_chat:
             print(f"⏭️ Сообщение из чата, игнорируем")
             return 'ok'
-        
-        # ... весь остальной код ...
         
         # Проверяем, есть ли фото и ждём ли мы скриншот
         state = user_states.get(user_id)
         if state and state.get("action") == "waiting_screenshot":
             if attachments and attachments[0].get("type") == "photo":
-                # Получаем фото
                 photo = attachments[0]["photo"]
                 owner_id = photo.get("owner_id")
                 photo_id = photo.get("id")
@@ -516,9 +504,8 @@ def vk_webhook():
                 if not participant:
                     del user_states[user_id]
                     send_vk_message(user_id, "❌ Ошибка: участник не найден")
-                    return "ok"
+                    return 'ok'
                 
-                # Сохраняем тренировку в БД
                 workout = add_workout(
                     participant["id"],
                     f"{participant['first_name']} {participant['last_name']}",
@@ -535,7 +522,7 @@ def vk_webhook():
                     day = get_current_day()
                     pace = duration / distance
                     
-                    # Уведомление участнику
+                    # Уведомление участнику в ЛС
                     send_vk_message(user_id,
                         f"✅ Тренировка принята!\n\n"
                         f"📅 День {day}\n"
@@ -559,14 +546,14 @@ def vk_webhook():
                 else:
                     send_vk_message(user_id, "❌ Ошибка при сохранении тренировки", get_main_keyboard())
                 
-                return "ok"
+                return 'ok'
             else:
                 send_vk_message(user_id, "❌ Отправьте скриншот (фото):", get_cancel_keyboard())
-                return "ok"
+                return 'ok'
         
         # Обработка текстовых состояний
         if handle_state(user_id, text):
-            return "ok"
+            return 'ok'
         
         # Обработка команд
         if text in ["/start", "меню", "Меню", "начать"]:
@@ -588,7 +575,7 @@ def vk_webhook():
             else:
                 send_vk_message(user_id, "Напишите /start для начала работы")
     
-    return "ok"
+    return 'ok'
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
