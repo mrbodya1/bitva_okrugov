@@ -467,36 +467,33 @@ def vk_webhook():
         user_id = msg["from_id"]
         peer_id = msg["peer_id"]
         text = msg.get("text", "").strip()
-        attachments = msg.get("attachments", [])
         
-        # Определяем, чат это или ЛС
-        is_chat = peer_id > 2000000000
+        # 🔥 САМАЯ ПЕРВАЯ ПРОВЕРКА - логируем ВСЁ
+        print(f"📨 СООБЩЕНИЕ: user={user_id}, peer={peer_id}, text='{text}'")
         
-        # 🔑 Команда /chatid — работает и в ЛС, и в чате
+        # 🔑 Обработка /chatid ДО ВСЕХ ОСТАЛЬНЫХ ПРОВЕРОК
         if text == '/chatid':
-            print(f"🔍 Обнаружена команда /chatid, is_chat={is_chat}")
-            
-            if is_chat:
-                # Пытаемся ответить в чат
-                try:
-                    vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
-                    vk.messages.send(
-                        peer_id=peer_id,
-                        message=f"💬 Peer ID этого чата: {peer_id}",
-                        random_id=random.randint(1, 2147483647),
-                        from_group=1
-                    )
-                except Exception as e:
-                    print(f"❌ Не удалось отправить в чат: {e}")
-                
-                # Дублируем в ЛС
-                send_vk_message(user_id, f"📋 Peer ID чата: {peer_id}\n\nСохрани это значение в config.py как VK_CHAT_ID")
-            else:
-                # Отвечаем в ЛС
-                send_vk_message(user_id, f"📋 Ваш Peer ID: {peer_id} (это личные сообщения)")
-            
-            print(f"✅ Ответ на /chatid отправлен")
+            print(f"🔍 КОМАНДА /chatid ОБНАРУЖЕНА!")
+            try:
+                vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+                vk.messages.send(
+                    user_id=user_id,
+                    message=f"Peer ID: {peer_id}",
+                    random_id=random.randint(1, 2147483647),
+                    from_group=1
+                )
+                print(f"✅ Ответ отправлен в ЛС")
+            except Exception as e:
+                print(f"❌ Ошибка: {e}")
             return 'ok'
+        
+        # Только потом проверяем чат/ЛС
+        is_chat = peer_id > 2000000000
+        if is_chat:
+            print(f"⏭️ Сообщение из чата, игнорируем")
+            return 'ok'
+        
+        # ... весь остальной код ...
         
         # Проверяем, есть ли фото и ждём ли мы скриншот
         state = user_states.get(user_id)
