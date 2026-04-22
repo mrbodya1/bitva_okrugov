@@ -668,28 +668,27 @@ def test_calculate_stage(stage):
 
 @app.route("/test/notify/<event_key>", methods=["GET", "POST"])
 def test_send_notification(event_key):
-    """Отправка уведомления"""
+    """Универсальный обработчик уведомлений"""
     
-    # Жеребьёвка (если нужна отдельно)
-    if event_key.startswith("stage_pairing"):
-        parts = event_key.split("_")
-        stage = int(parts[-1]) if len(parts) > 2 else 1
+    # Жеребьёвка этапа: stage_pairing_1, stage_pairing_2, ...
+    if event_key.startswith("stage_pairing_"):
+        stage = int(event_key.split("_")[-1])
         matches = get_stage_matches(stage)
         if matches:
             calendar = supabase.table("calendar").select("stage_date").eq("stage", stage).execute()
-            date_str = "9 июня"
-            if calendar.data:
-                date_str = calendar.data[0]["stage_date"]
+            date_str = calendar.data[0]["stage_date"] if calendar.data else f"этап {stage}"
+            
             lines = [f"🔥 ЖЕРЕБЬЁВКА ЭТАПА №{stage} ({date_str})", ""]
             for m in matches:
-                lines.append(f"{m['team1_name']} 🆚 {m['team2_name']}")
+                if not m.get("team1_km") and not m.get("team2_km"):
+                    lines.append(f"{m['team1_name']} 🆚 {m['team2_name']}")
             lines.append("")
             lines.append("Удачи всем командам! 🏃‍♂️")
             send_to_chat_text(config.VK_CHAT_ID, "\n".join(lines))
             return f"✅ Жеребьёвка этапа {stage} отправлена"
     
-    # Предварительные/окончательные результаты этапов
-    elif event_key.startswith("stage_"):
+    # Предварительные/окончательные этапа: stage_1_preliminary, stage_2_final, ...
+    elif event_key.startswith("stage_") and ("_preliminary" in event_key or "_final" in event_key):
         parts = event_key.split("_")
         stage = int(parts[1])
         n_type = parts[2]  # "preliminary" или "final"
@@ -699,98 +698,112 @@ def test_send_notification(event_key):
             formatted = []
             for m in matches:
                 formatted.append({
-                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
-                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
+                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0),
+                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0)
                 })
             
             calendar = supabase.table("calendar").select("stage_date").eq("stage", stage).execute()
-            date_str = "9 июня"
-            if calendar.data:
-                date_str = calendar.data[0]["stage_date"]
+            date_str = calendar.data[0]["stage_date"] if calendar.data else f"этап {stage}"
             
             send_match_notification(
-                f"stage_{n_type}", 
-                stage=stage, 
+                f"stage_{n_type}",
+                stage=stage,
                 date=date_str,
                 matches=formatted,
                 rating_url="https://bitva-okrugov.onrender.com/rating"
             )
             return f"✅ {n_type} этапа {stage} отправлено"
     
-    # Полуфиналы
-    elif event_key == "semi_preliminary":
-        matches = get_stage_matches("semi")
-        if matches:
-            formatted = []
-            for m in matches:
-                formatted.append({
-                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
-                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
-                })
-            send_match_notification("semi_preliminary", date="24 июня", matches=formatted)
-            return "✅ Предварительные результаты полуфиналов отправлены"
-    
-    elif event_key == "semi_final":
-        matches = get_stage_matches("semi")
-        if matches:
-            formatted = []
-            winners = []
-            for m in matches:
-                formatted.append({
-                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
-                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
-                })
-                if m.get("winner_id"):
-                    winner = m["team1_name"] if m["winner_id"] == m["team1_id"] else m["team2_name"]
-                    winners.append(winner)
-            
-            final_team1 = winners[0] if len(winners) > 0 else "?"
-            final_team2 = winners[1] if len(winners) > 1 else "?"
-            
-            send_match_notification("semi_final", date="24 июня", matches=formatted,
-                                    final_date="27 июня",
-                                    final_team1=final_team1, final_team2=final_team2,
-                                    third_team1="?", third_team2="?",
-                                    rating_url="https://bitva-okrugov.onrender.com/rating")
-            return "✅ Окончательные результаты полуфиналов отправлены"
-    
-    # Финал
-    elif event_key == "final_preliminary":
-        matches = get_stage_matches("final")
-        if matches:
-            formatted = []
-            for m in matches:
-                formatted.append({
-                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
-                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
-                })
-            send_match_notification("final_preliminary", date="27 июня", matches=formatted)
-            return "✅ Предварительные результаты финала отправлены"
-    
-    elif event_key == "final_final":
-        matches = get_stage_matches("final")
-        if matches:
-            m = matches[0]
-            winner = m["team1_name"] if m.get("winner_id") == m["team1_id"] else m["team2_name"]
-            second = m["team2_name"] if winner == m["team1_name"] else m["team1_name"]
-            
-            send_match_notification("final_final", date="27 июня",
-                                    winner=winner, second=second, third="?",
-                                    rating_url="https://bitva-okrugov.onrender.com/rating")
-            return "✅ Результаты финала отправлены"
-    
+    # Топ-4
     elif event_key == "top4":
         teams = get_top4_teams()
-        if teams:
-            formatted = []
-            for t in teams:
-                formatted.append({
-                    "name": t["name"], "points": t["points"], "diff": t["wins"] - t["losses"]
-                })
+        if teams and len(teams) >= 4:
+            formatted = [{"name": t["name"], "points": t["points"], "diff": t["wins"] - t["losses"]} for t in teams]
             send_match_notification("top4", teams=formatted, semi_date="24 июня",
                                     team1=teams[0]["name"], team4=teams[3]["name"],
                                     team2=teams[1]["name"], team3=teams[2]["name"])
             return "✅ Топ-4 отправлен"
+    
+    # Пары полуфинала
+    elif event_key == "semi_pairs":
+        top4 = get_top4_teams()
+        if top4 and len(top4) >= 4:
+            lines = [
+                "🔥 ПОЛУФИНАЛЫ | 24 июня",
+                "",
+                f"🥇 {top4[0]['name']} 🆚 {top4[3]['name']}",
+                f"🥈 {top4[1]['name']} 🆚 {top4[2]['name']}",
+                "",
+                "Удачи всем командам! 🏃‍♂️"
+            ]
+            send_to_chat_text(config.VK_CHAT_ID, "\n".join(lines))
+            return "✅ Пары полуфинала отправлены"
+    
+    # Предварительные/окончательные полуфинала
+    elif event_key in ["semi_preliminary", "semi_final"]:
+        matches = get_stage_matches("semi")
+        if matches:
+            formatted = []
+            for m in matches:
+                formatted.append({
+                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0),
+                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0)
+                })
+            n_type = "preliminary" if "preliminary" in event_key else "final"
+            send_match_notification(f"semi_{n_type}", date="24 июня", matches=formatted)
+            return f"✅ {n_type} полуфинала отправлено"
+    
+    # Пары финала
+    elif event_key == "final_pairs":
+        semi_matches = get_stage_matches("semi")
+        winners = []
+        losers = []
+        for m in semi_matches:
+            if m.get("winner_id"):
+                if m["winner_id"] == m.get("team1_id"):
+                    winners.append(m["team1_name"])
+                    losers.append(m["team2_name"])
+                else:
+                    winners.append(m["team2_name"])
+                    losers.append(m["team1_name"])
+        
+        if len(winners) >= 2 and len(losers) >= 2:
+            lines = [
+                "🏆 ПЛЕЙ-ОФФ | 27 июня",
+                "",
+                "🔥 ФИНАЛ (за 1-2 место):",
+                f"{winners[0]} 🆚 {winners[1]}",
+                "",
+                "🥉 МАТЧ ЗА 3 МЕСТО:",
+                f"{losers[0]} 🆚 {losers[1]}",
+                "",
+                "Удачи всем командам! 🏃‍♂️"
+            ]
+            send_to_chat_text(config.VK_CHAT_ID, "\n".join(lines))
+            return "✅ Пары финала отправлены"
+    
+    # Предварительные/окончательные финала
+    elif event_key in ["final_preliminary", "final_final"]:
+        matches = get_stage_matches("final")
+        if matches:
+            formatted = []
+            for m in matches:
+                formatted.append({
+                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0),
+                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0)
+                })
+            n_type = "preliminary" if "preliminary" in event_key else "final"
+            
+            # Для final_final определяем победителя
+            if n_type == "final" and matches:
+                m = matches[0]
+                winner = m["team1_name"] if m.get("winner_id") == m.get("team1_id") else m["team2_name"]
+                second = m["team2_name"] if winner == m["team1_name"] else m["team1_name"]
+                send_match_notification("final_final", date="27 июня", winner=winner, second=second, third="?",
+                                        rating_url="https://bitva-okrugov.onrender.com/rating")
+            else:
+                send_match_notification(f"final_{n_type}", date="27 июня", matches=formatted)
+            return f"✅ {n_type} финала отправлено"
     
     return f"❌ Неизвестный event_key: {event_key}"
 
