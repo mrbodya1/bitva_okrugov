@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, jsonify
 import requests
 import json
 import uuid
@@ -10,6 +10,7 @@ from yookassa import Payment
 import vk_api
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from supabase_client import (
+    supabase,
     get_participant_by_vk,
     get_pending_participant_by_name,
     activate_participant,
@@ -21,7 +22,13 @@ from supabase_client import (
     get_current_day,
     count_participants_by_region,
     register_team_payment,
-    register_solo_payment
+    register_solo_payment,
+    get_notification_template,
+    create_stage_pairs,
+    create_playoff_pairs,
+    calculate_stage_results,
+    get_stage_matches,
+    get_top4_teams
 )
 
 app = Flask(__name__)
@@ -327,6 +334,63 @@ def handle_state(user_id, text):
     
     return False
 
+# ========== ФОРМИРОВАНИЕ И ОТПРАВКА УВЕДОМЛЕНИЙ ==========
+
+def send_match_notification(event_key, stage=None, date=None, matches=None, **kwargs):
+    """Отправить уведомление с матчами в общий чат"""
+    template = get_notification_template(event_key)
+    if not template:
+        print(f"❌ Шаблон {event_key} не найден")
+        return
+    
+    lines = []
+    
+    # Заголовок
+    if template.get("header"):
+        header = template["header"]
+        if stage is not None:
+            header = header.replace("{stage}", str(stage))
+        if date:
+            header = header.replace("{date}", date)
+        lines.append(header)
+        lines.append("")
+    
+    # Матчи
+    if matches:
+        for m in matches:
+            if m["team1_km"] > m["team2_km"]:
+                line = f"✅ {m['team1_name']} {m['team1_km']:.1f} км 🆚 {m['team2_km']:.1f} км {m['team2_name']} ❌"
+            elif m["team2_km"] > m["team1_km"]:
+                line = f"❌ {m['team1_name']} {m['team1_km']:.1f} км 🆚 {m['team2_km']:.1f} км {m['team2_name']} ✅"
+            else:
+                if m.get("team1_time", 0) < m.get("team2_time", 0):
+                    line = f"✅ {m['team1_name']} {m['team1_km']:.1f} км 🆚 {m['team2_km']:.1f} км {m['team2_name']} ❌"
+                else:
+                    line = f"❌ {m['team1_name']} {m['team1_km']:.1f} км 🆚 {m['team2_km']:.1f} км {m['team2_name']} ✅"
+            lines.append(line)
+        lines.append("")
+    
+    # Топ-4
+    if event_key == "top4" and kwargs.get("teams"):
+        for i, team in enumerate(kwargs["teams"], 1):
+            emoji = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"][i-1]
+            lines.append(f"{emoji} {team['name']} — {team['points']} очков (+{team['diff']})")
+        lines.append("")
+    
+    # Подвал
+    if template.get("footer"):
+        footer = template["footer"]
+        for key, value in kwargs.items():
+            if value is not None:
+                footer = footer.replace(f"{{{key}}}", str(value))
+        lines.append(footer)
+    
+    message = "\n".join(lines).strip()
+    
+    if config.VK_CHAT_ID:
+        send_to_chat_text(config.VK_CHAT_ID, message)
+        print(f"✅ Уведомление {event_key} отправлено")
+
 # ========== ВЕБ-СТРАНИЦЫ ==========
 
 @app.route("/")
@@ -340,6 +404,10 @@ def register_team():
 @app.route("/register/solo")
 def register_solo():
     return render_template("register_solo.html")
+
+@app.route("/rating")
+def rating_page():
+    return render_template("rating.html")
 
 # ========== СОЗДАНИЕ ПЛАТЕЖЕЙ ==========
 
@@ -460,7 +528,7 @@ def vk_webhook():
         
         print(f"📨 СООБЩЕНИЕ: user={user_id}, peer={peer_id}, text='{text}'")
         
-        # 🔑 ПРОВЕРКА chatid ДО ВСЕГО (и в чате, и в ЛС)
+        # Проверка chatid
         if text in ['/chatid', '/chat_id', 'chatid', 'chat_id']:
             print(f"🔍 КОМАНДА chatid ОБНАРУЖЕНА!")
             try:
@@ -479,7 +547,7 @@ def vk_webhook():
         # Проверяем, чат это или ЛС
         is_chat = peer_id > 2000000000
         
-        # Игнорируем все остальные сообщения из чатов
+        # Игнорируем сообщения из чатов
         if is_chat:
             print(f"⏭️ Сообщение из чата, игнорируем")
             return 'ok'
@@ -522,7 +590,6 @@ def vk_webhook():
                     day = get_current_day()
                     pace = duration / distance
                     
-                    # Уведомление участнику в ЛС
                     send_vk_message(user_id,
                         f"✅ Тренировка принята!\n\n"
                         f"📅 День {day}\n"
@@ -532,7 +599,6 @@ def vk_webhook():
                         get_main_keyboard()
                     )
                     
-                    # Отправка в общий чат
                     chat_id = config.VK_CHAT_ID
                     if chat_id:
                         chat_msg = (f"✅ ТРЕНИРОВКА ПРИНЯТА\n\n"
@@ -576,6 +642,100 @@ def vk_webhook():
                 send_vk_message(user_id, "Напишите /start для начала работы")
     
     return 'ok'
+
+# ========== ТЕСТОВЫЕ МАРШРУТЫ ==========
+
+@app.route("/test/create-pairs/<int:stage>")
+def test_create_pairs(stage):
+    result = create_stage_pairs(stage)
+    if result:
+        return f"✅ Создано {result['count']} пар для этапа {stage} (дата: {result['date']})"
+    return "❌ Ошибка создания пар"
+
+@app.route("/test/create-playoff")
+def test_create_playoff():
+    result = create_playoff_pairs()
+    if result:
+        return f"✅ Создано {result['count']} пар для полуфиналов"
+    return "❌ Ошибка создания пар"
+
+@app.route("/test/calculate/<int:stage>")
+def test_calculate_stage(stage):
+    results = calculate_stage_results(stage)
+    return jsonify({"count": len(results), "results": results})
+
+@app.route("/test/notify/<event_key>")
+def test_send_notification(event_key):
+    if event_key == "stage_pairing":
+        matches = get_stage_matches(1)
+        if matches:
+            formatted = []
+            for m in matches:
+                formatted.append({
+                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
+                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
+                })
+            send_match_notification("stage_pairing", stage=1, date="9 мая", matches=formatted)
+            return f"✅ Уведомление о жеребьёвке отправлено"
+    
+    elif event_key in ["stage_preliminary", "stage_final"]:
+        matches = get_stage_matches(1)
+        if matches:
+            formatted = []
+            for m in matches:
+                formatted.append({
+                    "team1_name": m["team1_name"], "team1_km": m.get("team1_km", 0), "team1_time": m.get("team1_time", 0),
+                    "team2_name": m["team2_name"], "team2_km": m.get("team2_km", 0), "team2_time": m.get("team2_time", 0)
+                })
+            send_match_notification(
+                event_key, stage=1, date="9 мая", matches=formatted,
+                rating_url="https://bitva-okrugov.onrender.com/rating"
+            )
+            return f"✅ Уведомление {event_key} отправлено"
+    
+    elif event_key == "top4":
+        teams = get_top4_teams()
+        if teams:
+            formatted = []
+            for t in teams:
+                formatted.append({
+                    "name": t["name"], "points": t["points"], "diff": t["wins"] - t["losses"]
+                })
+            send_match_notification(
+                "top4", teams=formatted, semi_date="24 мая",
+                team1=teams[0]["name"], team4=teams[3]["name"],
+                team2=teams[1]["name"], team3=teams[2]["name"]
+            )
+            return f"✅ Уведомление top4 отправлено"
+    
+    return f"❌ Неизвестный event_key: {event_key}"
+
+@app.route("/test/cleanup")
+def test_cleanup():
+    try:
+        supabase.table("participants").delete().like("first_name", "Тест%").execute()
+        supabase.table("teams").delete().or_("name.like.%Тест%,name.like.%Сборная%").execute()
+        supabase.table("matches").delete().neq("id", 0).execute()
+        supabase.table("calendar").delete().eq("is_test", True).execute()
+        return "✅ Тестовые данные удалены"
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
+
+@app.route("/test/full-run")
+def test_full_run():
+    results = []
+    try:
+        r1 = create_stage_pairs(1)
+        results.append(f"Этап 1: создано {r1['count']} пар")
+        r1_calc = calculate_stage_results(1)
+        results.append(f"Этап 1: подсчитано {len(r1_calc)} матчей")
+        r2 = create_stage_pairs(2)
+        results.append(f"Этап 2: создано {r2['count']} пар")
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+# ========== ЗАПУСК ==========
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
