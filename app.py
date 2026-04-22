@@ -280,11 +280,17 @@ def handle_state(user_id, text):
             send_vk_message(user_id, f"❌ Максимальный темп: {config.MAX_PACE}:00 мин/км\nВаш темп: {pace:.2f} мин/км", get_cancel_keyboard())
             return True
         
-        participant = get_participant_by_vk(user_id)
-        if not participant:
-            del user_states[user_id]
-            send_vk_message(user_id, "❌ Ошибка: участник не найден")
-            return True
+        # Переходим к запросу скриншота
+        user_states[user_id] = {
+            "action": "waiting_screenshot",
+            "distance": distance,
+            "duration": duration
+        }
+        send_vk_message(user_id, 
+            "📸 Отправьте скриншот тренировки (должны быть видны дата, дистанция и темп):",
+            get_cancel_keyboard()
+        )
+        return True
         
         workout = add_workout(
             participant["id"],
@@ -314,6 +320,25 @@ def handle_state(user_id, text):
         return True
     
     return False
+
+# ========== ОТПРАВКА В ЧАТ С ФОТО ==========
+
+def send_to_chat_with_photo(chat_id, message, photo_attachment):
+    """Отправка сообщения с фото в общий чат"""
+    try:
+        vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
+        vk.messages.send(
+            peer_id=chat_id,
+            message=message,
+            attachment=photo_attachment,
+            random_id=random.randint(1, 2147483647),
+            from_group=1
+        )
+        print(f"✅ Скриншот отправлен в чат {chat_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка отправки в чат: {e}")
+        return False
 
 # ========== ВЕБ-СТРАНИЦЫ ==========
 
@@ -442,8 +467,78 @@ def vk_webhook():
         msg = data["object"]["message"]
         user_id = msg["from_id"]
         text = msg.get("text", "").strip()
+        attachments = msg.get("attachments", [])
         
-        # Обработка состояний
+        # Проверяем, есть ли фото и ждём ли мы скриншот
+        state = user_states.get(user_id)
+        if state and state.get("action") == "waiting_screenshot":
+            if attachments and attachments[0].get("type") == "photo":
+                # Получаем фото
+                photo = attachments[0]["photo"]
+                owner_id = photo.get("owner_id")
+                photo_id = photo.get("id")
+                access_key = photo.get("access_key", "")
+                
+                photo_attachment = f"photo{owner_id}_{photo_id}"
+                if access_key:
+                    photo_attachment += f"_{access_key}"
+                
+                distance = state["distance"]
+                duration = state["duration"]
+                
+                participant = get_participant_by_vk(user_id)
+                if not participant:
+                    del user_states[user_id]
+                    send_vk_message(user_id, "❌ Ошибка: участник не найден")
+                    return "ok"
+                
+                # Сохраняем тренировку в БД
+                workout = add_workout(
+                    participant["id"],
+                    f"{participant['first_name']} {participant['last_name']}",
+                    participant["team_id"],
+                    participant["team_name"],
+                    participant["region"],
+                    distance,
+                    duration
+                )
+                
+                del user_states[user_id]
+                
+                if workout:
+                    day = get_current_day()
+                    pace = duration / distance
+                    
+                    # Уведомление участнику
+                    send_vk_message(user_id,
+                        f"✅ Тренировка принята!\n\n"
+                        f"📅 День {day}\n"
+                        f"📏 Дистанция: {distance} км\n"
+                        f"⏱ Время: {duration} мин\n"
+                        f"⚡ Темп: {pace:.2f} мин/км",
+                        get_main_keyboard()
+                    )
+                    
+                    # Отправка в общий чат
+                    chat_id = config.VK_CHAT_ID
+                    if chat_id:
+                        chat_msg = (f"✅ ТРЕНИРОВКА ПРИНЯТА\n\n"
+                                   f"👤 {participant['first_name']} {participant['last_name']}\n"
+                                   f"📍 {participant['region']} | {participant['team_name']}\n"
+                                   f"📅 День {day}\n"
+                                   f"📏 {distance} км\n"
+                                   f"⏱ {duration} мин\n"
+                                   f"⚡ Темп: {pace:.2f} мин/км")
+                        send_to_chat_with_photo(chat_id, chat_msg, photo_attachment)
+                else:
+                    send_vk_message(user_id, "❌ Ошибка при сохранении тренировки", get_main_keyboard())
+                
+                return "ok"
+            else:
+                send_vk_message(user_id, "❌ Отправьте скриншот (фото):", get_cancel_keyboard())
+                return "ok"
+        
+        # Обработка текстовых состояний
         if handle_state(user_id, text):
             return "ok"
         
