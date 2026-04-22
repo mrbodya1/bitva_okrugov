@@ -466,8 +466,21 @@ def vk_webhook():
     if data.get("type") == "message_new":
         msg = data["object"]["message"]
         user_id = msg["from_id"]
+        peer_id = msg["peer_id"]
         text = msg.get("text", "").strip()
         attachments = msg.get("attachments", [])
+        
+        # Определяем, чат это или ЛС
+        is_chat = peer_id > 2000000000
+        
+        # Команда /chatid работает везде
+        if text == '/chatid':
+            send_vk_message(user_id, f"Peer ID: {peer_id}")
+            return 'ok'
+        
+        # Игнорируем остальные команды из чатов
+        if is_chat:
+            return 'ok'
         
         # Проверяем, есть ли фото и ждём ли мы скриншот
         state = user_states.get(user_id)
@@ -521,10 +534,7 @@ def vk_webhook():
                     
                     # Отправка в общий чат
                     chat_id = config.VK_CHAT_ID
-                    if is_chat:
-                        if text == '/chatid':
-                            send_message(peer_id, f"Peer ID этого чата: {peer_id}")
-                        return 'ok'
+                    if chat_id:
                         chat_msg = (f"✅ ТРЕНИРОВКА ПРИНЯТА\n\n"
                                    f"👤 {participant['first_name']} {participant['last_name']}\n"
                                    f"📍 {participant['region']} | {participant['team_name']}\n"
