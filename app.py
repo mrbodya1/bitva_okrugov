@@ -31,25 +31,33 @@ if config.YOOKASSA_SHOP_ID and config.YOOKASSA_SECRET_KEY:
     yookassa.Configuration.account_id = config.YOOKASSA_SHOP_ID
     yookassa.Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
+# Хранилище состояний пользователей
 user_states = {}
 
-def send_vk_message(peer_id, text, keyboard=None):
+# ========== ОТПРАВКА СООБЩЕНИЙ ВК ==========
+
+def send_vk_message(user_id, text, keyboard=None):
+    """Отправка сообщения пользователю. user_id = from_id из сообщения"""
     try:
         vk = vk_api.VkApi(token=config.VK_GROUP_TOKEN).get_api()
         params = {
-            'peer_id': peer_id,
+            'user_id': user_id,  # ← используем user_id вместо peer_id
             'message': text,
             'random_id': random.randint(1, 2147483647),
             'from_group': 1
         }
         if keyboard:
             params['keyboard'] = keyboard
+            print(f"📤 Отправка клавиатуры для user_id={user_id}")
+        
         vk.messages.send(**params)
-        print(f"✅ Сообщение отправлено для peer_id={peer_id}")
+        print(f"✅ Сообщение отправлено для user_id={user_id}")
         return True
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
         return False
+
+# ========== КЛАВИАТУРЫ ==========
 
 def get_main_keyboard():
     keyboard = VkKeyboard()
@@ -69,39 +77,39 @@ def get_cancel_keyboard():
 
 # ========== ГЛАВНОЕ МЕНЮ ==========
 
-def send_main_menu(peer_id, first_name):
+def send_main_menu(user_id, first_name):
     day = get_current_day()
     text = f"🏔️ БИТВА ОКРУГОВ\n\nПривет, {first_name}!\nДень {day}\n\nВыберите действие:"
-    send_vk_message(peer_id, text, get_main_keyboard())
+    send_vk_message(user_id, text, get_main_keyboard())
 
 # ========== ОБРАБОТКА КОМАНД БОТА ==========
 
-def handle_start(peer_id, user_id):
+def handle_start(user_id):
     participant = get_participant_by_vk(user_id)
     
     if participant:
-        send_main_menu(peer_id, participant["first_name"])
+        send_main_menu(user_id, participant["first_name"])
         return
     
     user_states[user_id] = {"action": "waiting_name"}
-    send_vk_message(peer_id, 
+    send_vk_message(user_id, 
         "👋 Добро пожаловать в челлендж «Битва округов»!\n\n"
         "Для активации введите ваши имя и фамилию через пробел.\n"
         "Например: Иван Иванов",
         get_cancel_keyboard()
     )
 
-def handle_add_workout_start(peer_id, user_id):
+def handle_add_workout_start(user_id):
     participant = get_participant_by_vk(user_id)
     if not participant:
-        send_vk_message(peer_id, "❌ Вы не зарегистрированы")
+        send_vk_message(user_id, "❌ Вы не зарегистрированы")
         return
     
     day = get_current_day()
     today_workout = get_today_workout(participant["id"], day)
     
     if today_workout:
-        send_vk_message(peer_id, 
+        send_vk_message(user_id, 
             f"❌ Вы уже добавили тренировку сегодня!\n"
             f"📏 {today_workout['original_km']} км за {today_workout['original_min']} мин",
             get_main_keyboard()
@@ -109,21 +117,20 @@ def handle_add_workout_start(peer_id, user_id):
         return
     
     user_states[user_id] = {"action": "waiting_distance"}
-    send_vk_message(peer_id, 
-        "🏃 Добавление тренировки\n\n"
-        f"Введите дистанцию в километрах (минимум {config.MIN_KM} км):",
+    send_vk_message(user_id, 
+        f"🏃 Добавление тренировки\n\nВведите дистанцию в км (минимум {config.MIN_KM} км):",
         get_cancel_keyboard()
     )
 
-def handle_stats(peer_id, user_id):
+def handle_stats(user_id):
     participant = get_participant_by_vk(user_id)
     if not participant:
-        send_vk_message(peer_id, "❌ Вы не зарегистрированы")
+        send_vk_message(user_id, "❌ Вы не зарегистрированы")
         return
     
     stats = get_personal_stats(user_id)
     if not stats:
-        send_vk_message(peer_id, "❌ Ошибка получения статистики")
+        send_vk_message(user_id, "❌ Ошибка получения статистики")
         return
     
     text = f"""📊 ВАША СТАТИСТИКА
@@ -137,9 +144,9 @@ def handle_stats(peer_id, user_id):
 ⏱ Всего минут: {stats['total_min']} мин
 ⚡ Средний темп: {stats['avg_pace']} мин/км"""
     
-    send_vk_message(peer_id, text, get_main_keyboard())
+    send_vk_message(user_id, text, get_main_keyboard())
 
-def handle_rating(peer_id, user_id):
+def handle_rating(user_id):
     rating = get_rating()
     
     text = "🏆 РЕЙТИНГ\n\n👨 МУЖЧИНЫ:\n"
@@ -159,9 +166,9 @@ def handle_rating(peer_id, user_id):
     text += f"ЯНАО: {rating['regions']['ynao']} км\n"
     text += f"👑 Лидер: {rating['regions']['leader']}"
     
-    send_vk_message(peer_id, text, get_main_keyboard())
+    send_vk_message(user_id, text, get_main_keyboard())
 
-def handle_teams(peer_id, user_id):
+def handle_teams(user_id):
     teams = get_team_rating()
     
     text = "👥 РЕЙТИНГ КОМАНД\n\n"
@@ -170,9 +177,9 @@ def handle_teams(peer_id, user_id):
         points = t.get("points", 0) or 0
         text += f"{i}. {t['name']} ({t['region']}) — {km} км | {points} очк.\n"
     
-    send_vk_message(peer_id, text, get_main_keyboard())
+    send_vk_message(user_id, text, get_main_keyboard())
 
-def handle_rules(peer_id):
+def handle_rules(user_id):
     text = f"""📜 ПРАВИЛА ЧЕЛЛЕНДЖА
 
 ✅ Минимальная дистанция: {config.MIN_KM} км
@@ -185,11 +192,11 @@ def handle_rules(peer_id):
 • Окружной — ХМАО против ЯНАО
 • Командный — микро-команды по 4 человека"""
     
-    send_vk_message(peer_id, text, get_main_keyboard())
+    send_vk_message(user_id, text, get_main_keyboard())
 
 # ========== ОБРАБОТКА СОСТОЯНИЙ ==========
 
-def handle_state(user_id, peer_id, text):
+def handle_state(user_id, text):
     state = user_states.get(user_id)
     if not state:
         return False
@@ -198,16 +205,16 @@ def handle_state(user_id, peer_id, text):
         del user_states[user_id]
         participant = get_participant_by_vk(user_id)
         if participant:
-            send_main_menu(peer_id, participant["first_name"])
+            send_main_menu(user_id, participant["first_name"])
         else:
-            send_vk_message(peer_id, "Действие отменено. Напишите /start для начала.")
+            send_vk_message(user_id, "Действие отменено. Напишите /start для начала.")
         return True
     
     # Ожидание имени и фамилии
     if state["action"] == "waiting_name":
         parts = text.split()
         if len(parts) < 2:
-            send_vk_message(peer_id, "❌ Введите имя и фамилию через пробел:")
+            send_vk_message(user_id, "❌ Введите имя и фамилию через пробел:")
             return True
         
         first_name = parts[0]
@@ -216,7 +223,7 @@ def handle_state(user_id, peer_id, text):
         pending = get_pending_participant_by_name(first_name, last_name)
         
         if not pending:
-            send_vk_message(peer_id, 
+            send_vk_message(user_id, 
                 "❌ Участник не найден. Проверьте правильность имени и фамилии или зарегистрируйтесь на сайте:\n"
                 f"{request.host_url}",
                 get_cancel_keyboard()
@@ -226,13 +233,13 @@ def handle_state(user_id, peer_id, text):
         activate_participant(pending["id"], user_id)
         del user_states[user_id]
         
-        send_vk_message(peer_id, 
+        send_vk_message(user_id, 
             f"✅ Активация успешна!\n\n"
             f"Добро пожаловать, {first_name}!\n"
             f"Округ: {pending['region']}\n"
             f"Команда: {pending['team_name']}"
         )
-        send_main_menu(peer_id, first_name)
+        send_main_menu(user_id, first_name)
         return True
     
     # Ожидание дистанции
@@ -240,18 +247,18 @@ def handle_state(user_id, peer_id, text):
         try:
             distance = float(text.replace(",", "."))
         except:
-            send_vk_message(peer_id, "❌ Введите число (например: 5.2):", get_cancel_keyboard())
+            send_vk_message(user_id, "❌ Введите число (например: 5.2):", get_cancel_keyboard())
             return True
         
         if distance < config.MIN_KM:
-            send_vk_message(peer_id, f"❌ Минимальная дистанция: {config.MIN_KM} км", get_cancel_keyboard())
+            send_vk_message(user_id, f"❌ Минимальная дистанция: {config.MIN_KM} км", get_cancel_keyboard())
             return True
         
         user_states[user_id] = {
             "action": "waiting_duration",
             "distance": distance
         }
-        send_vk_message(peer_id, f"✅ Дистанция: {distance} км\n\nВведите время в минутах:", get_cancel_keyboard())
+        send_vk_message(user_id, f"✅ Дистанция: {distance} км\n\nВведите время в минутах:", get_cancel_keyboard())
         return True
     
     # Ожидание времени
@@ -259,24 +266,24 @@ def handle_state(user_id, peer_id, text):
         try:
             duration = int(text)
         except:
-            send_vk_message(peer_id, "❌ Введите целое число минут:", get_cancel_keyboard())
+            send_vk_message(user_id, "❌ Введите целое число минут:", get_cancel_keyboard())
             return True
         
         if duration <= 0:
-            send_vk_message(peer_id, "❌ Время должно быть больше 0:", get_cancel_keyboard())
+            send_vk_message(user_id, "❌ Время должно быть больше 0:", get_cancel_keyboard())
             return True
         
         distance = state["distance"]
         pace = duration / distance
         
         if pace > config.MAX_PACE:
-            send_vk_message(peer_id, f"❌ Максимальный темп: {config.MAX_PACE}:00 мин/км\nВаш темп: {pace:.2f} мин/км", get_cancel_keyboard())
+            send_vk_message(user_id, f"❌ Максимальный темп: {config.MAX_PACE}:00 мин/км\nВаш темп: {pace:.2f} мин/км", get_cancel_keyboard())
             return True
         
         participant = get_participant_by_vk(user_id)
         if not participant:
             del user_states[user_id]
-            send_vk_message(peer_id, "❌ Ошибка: участник не найден")
+            send_vk_message(user_id, "❌ Ошибка: участник не найден")
             return True
         
         workout = add_workout(
@@ -293,7 +300,7 @@ def handle_state(user_id, peer_id, text):
         
         if workout:
             day = get_current_day()
-            send_vk_message(peer_id,
+            send_vk_message(user_id,
                 f"✅ Тренировка добавлена!\n\n"
                 f"📅 День {day}\n"
                 f"📏 Дистанция: {distance} км\n"
@@ -301,9 +308,9 @@ def handle_state(user_id, peer_id, text):
                 f"⚡ Темп: {pace:.2f} мин/км"
             )
         else:
-            send_vk_message(peer_id, "❌ Ошибка при сохранении тренировки")
+            send_vk_message(user_id, "❌ Ошибка при сохранении тренировки")
         
-        send_main_menu(peer_id, participant["first_name"])
+        send_main_menu(user_id, participant["first_name"])
         return True
     
     return False
@@ -337,19 +344,16 @@ def create_team_payment():
         {"first": request.form.get("m4_first"), "last": request.form.get("m4_last"), "gender": request.form.get("m4_gender")}
     ]
     
-    # Проверка заполнения
     for i, m in enumerate(members):
         if not m["first"] or not m["last"] or not m["gender"]:
             return render_template("error.html", error=f"Участник {i+1}: заполните все поля")
     
-    # Проверка лимита
     current_count = count_participants_by_region(region)
     if current_count + 4 > config.MAX_PER_REGION:
         return render_template("error.html", 
             error=f"В округе {region} осталось только {config.MAX_PER_REGION - current_count} мест"
         )
     
-    # Бесплатная регистрация по промокоду
     if promo_code == config.SECRET_PROMO_CODE:
         payment_id = f"promo_{uuid.uuid4()}"
         register_team_payment(payment_id, team_name, region, members, 0)
@@ -357,7 +361,6 @@ def create_team_payment():
             message=f"✅ Команда «{team_name}» зарегистрирована БЕСПЛАТНО по промокоду!"
         )
     
-    # Платная регистрация
     idempotence_key = str(uuid.uuid4())
     payment = Payment.create({
         "amount": {"value": f"{config.PRICE_TEAM}.00", "currency": "RUB"},
@@ -384,7 +387,6 @@ def create_solo_payment():
     if current_count >= config.MAX_PER_REGION:
         return render_template("error.html", error=f"Регистрация в округе {region} закрыта")
     
-    # Бесплатная регистрация по промокоду
     if promo_code == config.SECRET_PROMO_CODE:
         payment_id = f"promo_{uuid.uuid4()}"
         register_solo_payment(payment_id, region, first_name, last_name, gender, 0)
@@ -392,7 +394,6 @@ def create_solo_payment():
             message=f"✅ {first_name} {last_name} зарегистрирован БЕСПЛАТНО по промокоду!"
         )
     
-    # Платная регистрация
     idempotence_key = str(uuid.uuid4())
     payment = Payment.create({
         "amount": {"value": f"{config.PRICE_SOLO}.00", "currency": "RUB"},
@@ -440,33 +441,31 @@ def vk_webhook():
     if data.get("type") == "message_new":
         msg = data["object"]["message"]
         user_id = msg["from_id"]
-        peer_id = msg["peer_id"]
         text = msg.get("text", "").strip()
         
-        if peer_id > 2000000000:
+        # Обработка состояний
+        if handle_state(user_id, text):
             return "ok"
         
-        if handle_state(user_id, peer_id, text):
-            return "ok"
-        
+        # Обработка команд
         if text in ["/start", "меню", "Меню", "начать"]:
-            handle_start(peer_id, user_id)
+            handle_start(user_id)
         elif text == "➕ Добавить тренировку":
-            handle_add_workout_start(peer_id, user_id)
+            handle_add_workout_start(user_id)
         elif text == "📊 Моя статистика":
-            handle_stats(peer_id, user_id)
+            handle_stats(user_id)
         elif text == "⭐️ Рейтинг":
-            handle_rating(peer_id, user_id)
+            handle_rating(user_id)
         elif text == "👥 Команды":
-            handle_teams(peer_id, user_id)
+            handle_teams(user_id)
         elif text == "📋 Правила":
-            handle_rules(peer_id)
+            handle_rules(user_id)
         else:
             participant = get_participant_by_vk(user_id)
             if participant:
-                send_main_menu(peer_id, participant["first_name"])
+                send_main_menu(user_id, participant["first_name"])
             else:
-                send_vk_message(peer_id, "Напишите /start для начала работы")
+                send_vk_message(user_id, "Напишите /start для начала работы")
     
     return "ok"
 
