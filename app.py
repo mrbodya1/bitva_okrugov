@@ -1049,7 +1049,11 @@ def api_rating():
             .execute()
         
         calendar = []
-        today = get_current_date().date()
+        # Используем datetime.now() напрямую
+        from datetime import datetime
+        import pytz
+        moscow_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(moscow_tz).date()
         
         for row in calendar_data.data:
             stage_date = datetime.fromisoformat(row['stage_date'].replace('Z', '+00:00')).date()
@@ -1110,6 +1114,8 @@ def api_rating():
         
     except Exception as e:
         print(f"❌ Ошибка API rating: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # ========== ЗАПУСК ==========
