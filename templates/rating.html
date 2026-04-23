@@ -525,55 +525,41 @@
         </div>
     </div>
 
-    <script>
-        // ========== ДАННЫЕ (будут загружаться с сервера) ==========
-        const mockData = {
-            regions: { hmao: 12480, ynao: 11230 },
-            top3: [
-                { name: 'ХМАО Ястребы', region: 'ХМАО', points: 7, km: 523.4 },
-                { name: 'ЯНАО Белые медведи', region: 'ЯНАО', points: 6, km: 498.2 },
-                { name: 'ХМАО Тайга', region: 'ХМАО', points: 6, km: 487.5 }
-            ],
-            men: [
-                { place: 1, name: 'Иван Иванов', team: 'ХМАО Ястребы', km: 156.3 },
-                { place: 2, name: 'Петр Петров', team: 'ЯНАО Белые медведи', km: 148.7 },
-                { place: 3, name: 'Сергей Сергеев', team: 'ХМАО Тайга', km: 142.1 },
-                { place: 4, name: 'Алексей Алексеев', team: 'ЯНАО Волки', km: 138.5 },
-                { place: 5, name: 'Дмитрий Дмитриев', team: 'ХМАО Сияние', km: 135.2 }
-            ],
-            women: [
-                { place: 1, name: 'Анна Аннова', team: 'ЯНАО Орлы', km: 132.8 },
-                { place: 2, name: 'Мария Мариева', team: 'ХМАО Ястребы', km: 128.4 },
-                { place: 3, name: 'Елена Еленова', team: 'ЯНАО Олени', km: 125.9 }
-            ],
-            teams: [
-                { place: 1, name: 'ХМАО Ястребы', region: 'ХМАО', points: 7, km: 523.4 },
-                { place: 2, name: 'ЯНАО Белые медведи', region: 'ЯНАО', points: 6, km: 498.2 },
-                { place: 3, name: 'ХМАО Тайга', region: 'ХМАО', points: 6, km: 487.5 },
-                { place: 4, name: 'ЯНАО Волки', region: 'ЯНАО', points: 5, km: 472.1 },
-                { place: 5, name: 'ХМАО Сияние', region: 'ХМАО', points: 4, km: 455.8 },
-                { place: 6, name: 'ЯНАО Орлы', region: 'ЯНАО', points: 4, km: 448.3 },
-                { place: 7, name: 'ЯНАО Олени', region: 'ЯНАО', points: 3, km: 432.7 },
-                { place: 8, name: 'ХМАО Медведи', region: 'ХМАО', points: 2, km: 418.9 }
-            ],
-            calendar: [
-                { date: '8 июня', event: 'Жеребьёвка этапа 1', status: 'completed' },
-                { date: '9 июня', event: 'Этап 1', status: 'completed' },
-                { date: '10 июня', event: 'Результаты этапа 1', status: 'completed' },
-                { date: '11 июня', event: 'Этап 2', status: 'current' },
-                { date: '13 июня', event: 'Этап 3', status: 'upcoming' },
-                { date: '15 июня', event: 'Этап 4', status: 'upcoming' },
-                { date: '24 июня', event: 'Полуфиналы', status: 'upcoming' },
-                { date: '27 июня', event: 'Финал', status: 'upcoming' }
-            ]
-        };
+        <script>
+        // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+        let ratingData = null;
+        let currentGender = 'men';
+        let showAllPersonal = false;
+        let showAllTeams = false;
 
-        // ========== РЕНДЕРИНГ ==========
+        // ========== ЗАГРУЗКА ДАННЫХ ==========
+        async function loadData() {
+            try {
+                const response = await fetch('/api/rating');
+                ratingData = await response.json();
+                renderAll();
+            } catch (e) {
+                console.error('Ошибка загрузки:', e);
+                document.querySelector('.container').innerHTML = '<p style="color: #e94560; text-align: center; padding: 40px;">Ошибка загрузки данных</p>';
+            }
+        }
+
+        function renderAll() {
+            if (!ratingData) return;
+            renderBattle();
+            renderTop3();
+            renderPersonal();
+            renderTeams();
+            renderCalendar();
+            renderBracket();
+        }
+
+        // ========== БИТВА ОКРУГОВ ==========
         function renderBattle() {
-            const hmao = mockData.regions.hmao;
-            const ynao = mockData.regions.ynao;
+            const hmao = ratingData.regions.hmao || 0;
+            const ynao = ratingData.regions.ynao || 0;
             const total = hmao + ynao;
-            const hmaoPct = Math.round(hmao / total * 100);
+            const hmaoPct = total > 0 ? Math.round(hmao / total * 100) : 50;
             const ynaoPct = 100 - hmaoPct;
 
             document.getElementById('hmao-km').textContent = hmao.toLocaleString();
@@ -585,62 +571,87 @@
             if (hmao > ynao) {
                 document.getElementById('region-hmao').classList.add('leader');
                 document.getElementById('region-ynao').classList.remove('leader');
-            } else {
+            } else if (ynao > hmao) {
                 document.getElementById('region-ynao').classList.add('leader');
                 document.getElementById('region-hmao').classList.remove('leader');
             }
         }
 
+        // ========== ТОП-3 КОМАНД ==========
         function renderTop3() {
             const container = document.getElementById('top3-container');
+            const top3 = ratingData.top3 || [];
             const medals = ['🥇', '🥈', '🥉'];
-            container.innerHTML = mockData.top3.map((t, i) => `
+            
+            if (top3.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 3; text-align: center; color: #a0a0c0;">Нет данных</p>';
+                return;
+            }
+            
+            container.innerHTML = top3.slice(0, 3).map((t, i) => `
                 <div class="top-card">
                     <div class="medal">${medals[i]}</div>
-                    <div class="team-name">${t.name}</div>
-                    <div class="team-region">${t.region}</div>
-                    <div class="team-stats">${t.points} очк · ${t.km} км</div>
+                    <div class="team-name">${t.name || ''}</div>
+                    <div class="team-region">${t.region || ''}</div>
+                    <div class="team-stats">${t.points || 0} очк · ${(t.total_km || 0).toFixed(1)} км</div>
                 </div>
             `).join('');
         }
 
-        let currentGender = 'men';
-        let showAllPersonal = false;
-
+        // ========== ЛИЧНЫЙ ЗАЧЕТ ==========
         function renderPersonal() {
-            const data = currentGender === 'men' ? mockData.men : mockData.women;
+            const data = currentGender === 'men' ? (ratingData.men || []) : (ratingData.women || []);
             const displayData = showAllPersonal ? data : data.slice(0, 5);
             const tbody = document.getElementById('personal-body');
-            tbody.innerHTML = displayData.map(p => `
+            
+            if (displayData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #a0a0c0;">Нет данных</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = displayData.map((p, idx) => `
                 <tr>
-                    <td>${p.place}</td>
-                    <td>${p.name}</td>
-                    <td><span class="team-tag">${p.team}</span></td>
-                    <td>${p.km}</td>
+                    <td>${showAllPersonal ? (idx + 1) : (idx + 1)}</td>
+                    <td>${p.first_name || ''} ${p.last_name || ''}</td>
+                    <td><span class="team-tag">${p.team_name || ''}</span></td>
+                    <td>${(p.total_km || 0).toFixed(1)}</td>
                 </tr>
             `).join('');
         }
 
-        let showAllTeams = false;
-
+        // ========== КОМАНДНЫЙ ЗАЧЕТ ==========
         function renderTeams() {
-            const data = mockData.teams;
+            const data = ratingData.teams || [];
             const displayData = showAllTeams ? data : data.slice(0, 8);
             const tbody = document.getElementById('teams-body');
-            tbody.innerHTML = displayData.map(t => `
+            
+            if (displayData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #a0a0c0;">Нет данных</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = displayData.map((t, idx) => `
                 <tr>
-                    <td>${t.place}</td>
-                    <td>${t.name}</td>
-                    <td>${t.region}</td>
-                    <td>${t.points}</td>
-                    <td>${t.km}</td>
+                    <td>${showAllTeams ? (idx + 1) : (idx + 1)}</td>
+                    <td>${t.name || ''}</td>
+                    <td>${t.region || ''}</td>
+                    <td>${t.points || 0}</td>
+                    <td>${(t.total_km || 0).toFixed(1)}</td>
                 </tr>
             `).join('');
         }
 
+        // ========== КАЛЕНДАРЬ ==========
         function renderCalendar() {
             const container = document.getElementById('calendar-list');
-            container.innerHTML = mockData.calendar.map(c => {
+            const calendar = ratingData.calendar || [];
+            
+            if (calendar.length === 0) {
+                container.innerHTML = '<p style="color: #a0a0c0; text-align: center;">Нет данных</p>';
+                return;
+            }
+            
+            container.innerHTML = calendar.map(c => {
                 let statusClass = '';
                 let statusText = '';
                 if (c.status === 'completed') { statusClass = 'completed'; statusText = '✓ Завершено'; }
@@ -656,29 +667,50 @@
             }).join('');
         }
 
+        // ========== ТУРНИРНАЯ СЕТКА ==========
         function renderBracket() {
             const container = document.getElementById('bracket-container');
-            const rounds = [
-                { name: 'Этап 1', matches: [['ХМАО Ястребы', 'ЯНАО Медведи', '42.5', '38.2'], ['ХМАО Тайга', 'ЯНАО Волки', '51.3', '44.7']] },
-                { name: 'Этап 2', matches: [['ХМАО Ястребы', 'ХМАО Тайга', '48.1', '45.3']] },
-                { name: 'Полуфинал', matches: [['ХМАО Ястребы', 'ЯНАО Орлы', '52.3', '41.5']] },
-                { name: 'Финал', matches: [['ХМАО Ястребы', 'ЯНАО Белые', '-', '-']] }
-            ];
+            const matches = ratingData.matches || {};
+            
+            const rounds = [];
+            for (let stage = 1; stage <= 9; stage++) {
+                const stageKey = String(stage);
+                if (matches[stageKey] && matches[stageKey].length > 0) {
+                    let roundName = '';
+                    if (stage <= 7) roundName = `Этап ${stage}`;
+                    else if (stage === 8) roundName = 'Полуфинал';
+                    else if (stage === 9) roundName = 'Финал';
+                    else roundName = `Стадия ${stage}`;
+                    
+                    rounds.push({
+                        name: roundName,
+                        matches: matches[stageKey]
+                    });
+                }
+            }
+            
+            if (rounds.length === 0) {
+                container.innerHTML = '<p style="color: #a0a0c0; text-align: center; width: 100%;">Матчи ещё не сгенерированы</p>';
+                return;
+            }
+            
             container.innerHTML = rounds.map(r => `
                 <div class="round">
                     <div class="round-title">${r.name}</div>
                     ${r.matches.map(m => {
-                        const t1win = parseFloat(m[2]) > parseFloat(m[3]);
-                        const t2win = parseFloat(m[3]) > parseFloat(m[2]);
+                        const t1win = m.winner_id && m.team1 === m.winner_id;
+                        const t2win = m.winner_id && m.team2 === m.winner_id;
+                        const score1 = m.score1 > 0 ? m.score1.toFixed(1) : '-';
+                        const score2 = m.score2 > 0 ? m.score2.toFixed(1) : '-';
                         return `
                         <div class="match-card">
                             <div class="match-team ${t1win ? 'winner' : ''}">
-                                <span>${m[0]}</span>
-                                <span class="match-score">${m[2]}</span>
+                                <span>${m.team1 || ''}</span>
+                                <span class="match-score">${score1}</span>
                             </div>
                             <div class="match-team ${t2win ? 'winner' : ''}">
-                                <span>${m[1]}</span>
-                                <span class="match-score">${m[3]}</span>
+                                <span>${m.team2 || ''}</span>
+                                <span class="match-score">${score2}</span>
                             </div>
                         </div>
                     `}).join('')}
@@ -688,13 +720,6 @@
 
         // ========== ИНИЦИАЛИЗАЦИЯ ==========
         function init() {
-            renderBattle();
-            renderTop3();
-            renderPersonal();
-            renderTeams();
-            renderCalendar();
-            renderBracket();
-
             // Вкладки
             document.querySelectorAll('.tab').forEach(t => {
                 t.addEventListener('click', () => {
@@ -728,6 +753,9 @@
                 renderTeams();
                 document.getElementById('show-more-teams').textContent = showAllTeams ? 'Скрыть' : 'Показать еще';
             });
+
+            // Загружаем данные
+            loadData();
         }
 
         init();
