@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Рейтинг — Битва округов</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 16px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Заголовок */
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h1 span {
+            background: #e94560;
+            font-size: 14px;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        /* Вкладки */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.05);
+            padding: 6px;
+            border-radius: 14px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            color: #a0a0c0;
+            font-weight: 500;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .tab.active {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Карточки */
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Битва округов */
+        .battle-row {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .region-card {
+            flex: 1;
+            background: rgba(255,255,255,0.03);
+            border-radius: 16px;
+            padding: 16px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .region-card.leader {
+            border-color: #e94560;
+            background: rgba(233,69,96,0.08);
+        }
+
+        .region-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .region-km {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e94560;
+        }
+
+        .region-badge {
+            font-size: 12px;
+            color: #a0a0c0;
+            margin-top: 4px;
+        }
+
+        .progress-bar {
+            margin-top: 16px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #c62a47);
+            border-radius: 4px;
+            transition: width 0.5s;
+        }
+
+        /* Топ-3 команды */
+        .top3-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .top-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 16px;
+            padding: 16px 8px;
+            text-align: center;
+        }
+
+        .top-card .medal {
+            font-size: 28px;
+            margin-bottom: 4px;
+        }
+
+        .top-card .team-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .top-card .team-region {
+            font-size: 11px;
+            color: #a0a0c0;
+            margin-bottom: 8px;
+        }
+
+        .top-card .team-stats {
+            font-size: 13px;
+            color: #e94560;
+        }
+
+        /* Таблицы */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 0 -20px;
+            padding: 0 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 8px;
+            color: #a0a0c0;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .highlight {
+            background: rgba(233,69,96,0.1);
+            border-radius: 8px;
+        }
+
+        .team-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            font-size: 11px;
+            color: #a0a0c0;
+        }
+
+        /* Вкладки личного зачета */
+        .sub-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .sub-tab {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            border: 1px solid transparent;
+        }
+
+        .sub-tab.active {
+            background: #e94560;
+        }
+
+        .show-more {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .show-more button {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #a0a0c0;
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .show-more button:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        /* Сетка матчей (турнирная) */
+        .bracket {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding-bottom: 16px;
+        }
+
+        .round {
+            min-width: 160px;
+        }
+
+        .round-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #a0a0c0;
+        }
+
+        .match-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .match-team {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+        }
+
+        .match-team.winner {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        .match-score {
+            color: #e94560;
+            font-weight: 600;
+        }
+
+        .calendar-list {
+            margin-top: 20px;
+        }
+
+        .calendar-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .calendar-date {
+            color: #a0a0c0;
+        }
+
+        .calendar-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .calendar-status.completed {
+            background: rgba(74,222,128,0.15);
+            color: #4ade80;
+        }
+
+        .calendar-status.current {
+            background: rgba(233,69,96,0.15);
+            color: #e94560;
+        }
+
+        /* Правила */
+        .rule-item {
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .rule-item:last-child {
+            border-bottom: none;
+        }
+
+        .rule-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .rule-desc {
+            color: #a0a0c0;
+            font-size: 14px;
+        }
+
+        .contact-link {
+            color: #e94560;
+            text-decoration: none;
+        }
+
+        /* Адаптив */
+        @media (max-width: 768px) {
+            .top3-grid {
+                gap: 8px;
+            }
+            .top-card {
+                padding: 12px 4px;
+            }
+            .top-card .team-name {
+                font-size: 12px;
+            }
+            .battle-row {
+                flex-direction: column;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .rating-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+            }
+            .full-width {
+                grid-column: span 2;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            🏔️ БИТВА ОКРУГОВ
+            <span>LIVE</span>
+        </h1>
+
+        <!-- Вкладки -->
+        <div class="tabs">
+            <div class="tab active" data-tab="rating">📊 Рейтинг</div>
+            <div class="tab" data-tab="matches">📋 Матчи</div>
+            <div class="tab" data-tab="rules">📜 Правила</div>
+        </div>
+
+        <!-- Вкладка Рейтинг -->
+        <div class="tab-content active" id="tab-rating">
+            <!-- Битва округов -->
+            <div class="card">
+                <div class="card-title">⚔️ Битва округов</div>
+                <div class="battle-row">
+                    <div class="region-card" id="region-hmao">
+                        <div class="region-name">ХМАО</div>
+                        <div class="region-km" id="hmao-km">--</div>
+                        <div class="region-badge" id="hmao-pct">0%</div>
+                    </div>
+                    <div class="region-card" id="region-ynao">
+                        <div class="region-name">ЯНАО</div>
+                        <div class="region-km" id="ynao-km">--</div>
+                        <div class="region-badge" id="ynao-pct">0%</div>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="battle-progress" style="width: 50%"></div>
+                </div>
+            </div>
+
+            <!-- Топ-3 команд -->
+            <div class="card">
+                <div class="card-title">🏆 Топ-3 команд</div>
+                <div class="top3-grid" id="top3-container">
+                    <!-- JS заполнит -->
+                </div>
+            </div>
+
+            <div class="rating-grid">
+                <!-- Личный зачет -->
+                <div class="card">
+                    <div class="card-title">👤 Личный зачет</div>
+                    <div class="sub-tabs">
+                        <div class="sub-tab active" data-gender="men">👨 Мужчины</div>
+                        <div class="sub-tab" data-gender="women">👩 Женщины</div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="personal-table">
+                            <thead>
+                                <tr><th>#</th><th>Имя</th><th>Команда</th><th>Км</th></tr>
+                            </thead>
+                            <tbody id="personal-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="show-more">
+                        <button id="show-more-personal">Показать еще</button>
+                    </div>
+                </div>
+
+                <!-- Командный зачет -->
+                <div class="card">
+                    <div class="card-title">👥 Команды</div>
+                    <div class="table-wrapper">
+                        <table id="teams-table">
+                            <thead>
+                                <tr><th>#</th><th>Команда</th><th>Округ</th><th>Очки</th><th>Км</th></tr>
+                            </thead>
+                            <tbody id="teams-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="show-more">
+                        <button id="show-more-teams">Показать еще</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Вкладка Матчи -->
+        <div class="tab-content" id="tab-matches">
+            <div class="card">
+                <div class="card-title">📅 Календарь этапов</div>
+                <div class="calendar-list" id="calendar-list"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">🏟️ Турнирная сетка</div>
+                <div class="bracket" id="bracket-container"></div>
+            </div>
+        </div>
+
+        <!-- Вкладка Правила -->
+        <div class="tab-content" id="tab-rules">
+            <div class="card">
+                <div class="card-title">📜 Правила челленджа</div>
+                <div class="rule-item">
+                    <div class="rule-title">🏃 Минимальная дистанция</div>
+                    <div class="rule-desc">3 км за одну тренировку</div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-title">⚡ Максимальный темп</div>
+                    <div class="rule-desc">8:00 мин/км (быстрее можно)</div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-title">📅 Одна тренировка в день</div>
+                    <div class="rule-desc">Учитывается только первая тренировка за день</div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-title">📍 Бег на улице</div>
+                    <div class="rule-desc">Только с GPS-треком, дорожка в зале не засчитывается</div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-title">👩 Женский коэффициент</div>
+                    <div class="rule-desc">Километры женщин умножаются на 1.2 в окружном зачёте</div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-title">📞 Контакты</div>
+                    <div class="rule-desc">Организатор: <a href="https://vk.com/bodya1" class="contact-link">@bodya1</a></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== ДАННЫЕ (будут загружаться с сервера) ==========
+        const mockData = {
+            regions: { hmao: 12480, ynao: 11230 },
+            top3: [
+                { name: 'ХМАО Ястребы', region: 'ХМАО', points: 7, km: 523.4 },
+                { name: 'ЯНАО Белые медведи', region: 'ЯНАО', points: 6, km: 498.2 },
+                { name: 'ХМАО Тайга', region: 'ХМАО', points: 6, km: 487.5 }
+            ],
+            men: [
+                { place: 1, name: 'Иван Иванов', team: 'ХМАО Ястребы', km: 156.3 },
+                { place: 2, name: 'Петр Петров', team: 'ЯНАО Белые медведи', km: 148.7 },
+                { place: 3, name: 'Сергей Сергеев', team: 'ХМАО Тайга', km: 142.1 },
+                { place: 4, name: 'Алексей Алексеев', team: 'ЯНАО Волки', km: 138.5 },
+                { place: 5, name: 'Дмитрий Дмитриев', team: 'ХМАО Сияние', km: 135.2 }
+            ],
+            women: [
+                { place: 1, name: 'Анна Аннова', team: 'ЯНАО Орлы', km: 132.8 },
+                { place: 2, name: 'Мария Мариева', team: 'ХМАО Ястребы', km: 128.4 },
+                { place: 3, name: 'Елена Еленова', team: 'ЯНАО Олени', km: 125.9 }
+            ],
+            teams: [
+                { place: 1, name: 'ХМАО Ястребы', region: 'ХМАО', points: 7, km: 523.4 },
+                { place: 2, name: 'ЯНАО Белые медведи', region: 'ЯНАО', points: 6, km: 498.2 },
+                { place: 3, name: 'ХМАО Тайга', region: 'ХМАО', points: 6, km: 487.5 },
+                { place: 4, name: 'ЯНАО Волки', region: 'ЯНАО', points: 5, km: 472.1 },
+                { place: 5, name: 'ХМАО Сияние', region: 'ХМАО', points: 4, km: 455.8 },
+                { place: 6, name: 'ЯНАО Орлы', region: 'ЯНАО', points: 4, km: 448.3 },
+                { place: 7, name: 'ЯНАО Олени', region: 'ЯНАО', points: 3, km: 432.7 },
+                { place: 8, name: 'ХМАО Медведи', region: 'ХМАО', points: 2, km: 418.9 }
+            ],
+            calendar: [
+                { date: '8 июня', event: 'Жеребьёвка этапа 1', status: 'completed' },
+                { date: '9 июня', event: 'Этап 1', status: 'completed' },
+                { date: '10 июня', event: 'Результаты этапа 1', status: 'completed' },
+                { date: '11 июня', event: 'Этап 2', status: 'current' },
+                { date: '13 июня', event: 'Этап 3', status: 'upcoming' },
+                { date: '15 июня', event: 'Этап 4', status: 'upcoming' },
+                { date: '24 июня', event: 'Полуфиналы', status: 'upcoming' },
+                { date: '27 июня', event: 'Финал', status: 'upcoming' }
+            ]
+        };
+
+        // ========== РЕНДЕРИНГ ==========
+        function renderBattle() {
+            const hmao = mockData.regions.hmao;
+            const ynao = mockData.regions.ynao;
+            const total = hmao + ynao;
+            const hmaoPct = Math.round(hmao / total * 100);
+            const ynaoPct = 100 - hmaoPct;
+
+            document.getElementById('hmao-km').textContent = hmao.toLocaleString();
+            document.getElementById('ynao-km').textContent = ynao.toLocaleString();
+            document.getElementById('hmao-pct').textContent = hmaoPct + '%';
+            document.getElementById('ynao-pct').textContent = ynaoPct + '%';
+            document.getElementById('battle-progress').style.width = hmaoPct + '%';
+
+            if (hmao > ynao) {
+                document.getElementById('region-hmao').classList.add('leader');
+                document.getElementById('region-ynao').classList.remove('leader');
+            } else {
+                document.getElementById('region-ynao').classList.add('leader');
+                document.getElementById('region-hmao').classList.remove('leader');
+            }
+        }
+
+        function renderTop3() {
+            const container = document.getElementById('top3-container');
+            const medals = ['🥇', '🥈', '🥉'];
+            container.innerHTML = mockData.top3.map((t, i) => `
+                <div class="top-card">
+                    <div class="medal">${medals[i]}</div>
+                    <div class="team-name">${t.name}</div>
+                    <div class="team-region">${t.region}</div>
+                    <div class="team-stats">${t.points} очк · ${t.km} км</div>
+                </div>
+            `).join('');
+        }
+
+        let currentGender = 'men';
+        let showAllPersonal = false;
+
+        function renderPersonal() {
+            const data = currentGender === 'men' ? mockData.men : mockData.women;
+            const displayData = showAllPersonal ? data : data.slice(0, 5);
+            const tbody = document.getElementById('personal-body');
+            tbody.innerHTML = displayData.map(p => `
+                <tr>
+                    <td>${p.place}</td>
+                    <td>${p.name}</td>
+                    <td><span class="team-tag">${p.team}</span></td>
+                    <td>${p.km}</td>
+                </tr>
+            `).join('');
+        }
+
+        let showAllTeams = false;
+
+        function renderTeams() {
+            const data = mockData.teams;
+            const displayData = showAllTeams ? data : data.slice(0, 8);
+            const tbody = document.getElementById('teams-body');
+            tbody.innerHTML = displayData.map(t => `
+                <tr>
+                    <td>${t.place}</td>
+                    <td>${t.name}</td>
+                    <td>${t.region}</td>
+                    <td>${t.points}</td>
+                    <td>${t.km}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderCalendar() {
+            const container = document.getElementById('calendar-list');
+            container.innerHTML = mockData.calendar.map(c => {
+                let statusClass = '';
+                let statusText = '';
+                if (c.status === 'completed') { statusClass = 'completed'; statusText = '✓ Завершено'; }
+                else if (c.status === 'current') { statusClass = 'current'; statusText = '🔥 Идёт'; }
+                else { statusClass = ''; statusText = '⏳ Ожидается'; }
+                return `
+                    <div class="calendar-item">
+                        <span class="calendar-date">${c.date}</span>
+                        <span>${c.event}</span>
+                        <span class="calendar-status ${statusClass}">${statusText}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderBracket() {
+            const container = document.getElementById('bracket-container');
+            const rounds = [
+                { name: 'Этап 1', matches: [['ХМАО Ястребы', 'ЯНАО Медведи', '42.5', '38.2'], ['ХМАО Тайга', 'ЯНАО Волки', '51.3', '44.7']] },
+                { name: 'Этап 2', matches: [['ХМАО Ястребы', 'ХМАО Тайга', '48.1', '45.3']] },
+                { name: 'Полуфинал', matches: [['ХМАО Ястребы', 'ЯНАО Орлы', '52.3', '41.5']] },
+                { name: 'Финал', matches: [['ХМАО Ястребы', 'ЯНАО Белые', '-', '-']] }
+            ];
+            container.innerHTML = rounds.map(r => `
+                <div class="round">
+                    <div class="round-title">${r.name}</div>
+                    ${r.matches.map(m => {
+                        const t1win = parseFloat(m[2]) > parseFloat(m[3]);
+                        const t2win = parseFloat(m[3]) > parseFloat(m[2]);
+                        return `
+                        <div class="match-card">
+                            <div class="match-team ${t1win ? 'winner' : ''}">
+                                <span>${m[0]}</span>
+                                <span class="match-score">${m[2]}</span>
+                            </div>
+                            <div class="match-team ${t2win ? 'winner' : ''}">
+                                <span>${m[1]}</span>
+                                <span class="match-score">${m[3]}</span>
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+            `).join('');
+        }
+
+        // ========== ИНИЦИАЛИЗАЦИЯ ==========
+        function init() {
+            renderBattle();
+            renderTop3();
+            renderPersonal();
+            renderTeams();
+            renderCalendar();
+            renderBracket();
+
+            // Вкладки
+            document.querySelectorAll('.tab').forEach(t => {
+                t.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    t.classList.add('active');
+                    document.getElementById(`tab-${t.dataset.tab}`).classList.add('active');
+                });
+            });
+
+            // Подвкладки (муж/жен)
+            document.querySelectorAll('.sub-tab').forEach(t => {
+                t.addEventListener('click', () => {
+                    document.querySelectorAll('.sub-tab').forEach(st => st.classList.remove('active'));
+                    t.classList.add('active');
+                    currentGender = t.dataset.gender;
+                    showAllPersonal = false;
+                    renderPersonal();
+                });
+            });
+
+            // Показать еще
+            document.getElementById('show-more-personal').addEventListener('click', () => {
+                showAllPersonal = !showAllPersonal;
+                renderPersonal();
+                document.getElementById('show-more-personal').textContent = showAllPersonal ? 'Скрыть' : 'Показать еще';
+            });
+
+            document.getElementById('show-more-teams').addEventListener('click', () => {
+                showAllTeams = !showAllTeams;
+                renderTeams();
+                document.getElementById('show-more-teams').textContent = showAllTeams ? 'Скрыть' : 'Показать еще';
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
