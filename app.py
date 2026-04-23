@@ -12,6 +12,7 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from supabase_client import (
     supabase,
     get_participant_by_vk,
+    get_all_active_participants,
     get_pending_participant_by_name,
     activate_participant,
     add_workout,
