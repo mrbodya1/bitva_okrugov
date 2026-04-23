@@ -1078,6 +1078,12 @@ def api_rating():
         matches_by_stage = {}
         for m in matches_data.data:
             stage_key = str(m['stage'])
+            # Маппинг для плей-офф
+            if stage_key == 'semi':
+                stage_key = '8'
+            elif stage_key == 'final':
+                stage_key = '9'
+            
             if stage_key not in matches_by_stage:
                 matches_by_stage[stage_key] = []
             matches_by_stage[stage_key].append({
