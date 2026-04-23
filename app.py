@@ -1022,6 +1022,95 @@ def test_full_notifications():
         results.append(traceback.format_exc())
         return jsonify(results), 500
 
+@app.route("/api/rating")
+def api_rating():
+    """API для страницы рейтинга"""
+    try:
+        # Битва округов
+        rating_data = get_rating()
+        
+        # Топ-3 команды
+        teams = get_team_rating()
+        top3 = teams[:3] if len(teams) >= 3 else teams
+        
+        # Личный зачет (мужчины и женщины)
+        all_participants = get_all_active_participants()
+        men = [p for p in all_participants if p.get('gender') == 'М']
+        women = [p for p in all_participants if p.get('gender') == 'Ж']
+        
+        men.sort(key=lambda x: x.get('total_km', 0) or 0, reverse=True)
+        women.sort(key=lambda x: x.get('total_km', 0) or 0, reverse=True)
+        
+        # Календарь этапов
+        calendar_data = supabase.table("calendar")\
+            .select("*")\
+            .order("stage")\
+            .execute()
+        
+        calendar = []
+        today = get_current_date().date()
+        
+        for row in calendar_data.data:
+            stage_date = datetime.fromisoformat(row['stage_date'].replace('Z', '+00:00')).date()
+            
+            if stage_date < today:
+                status = 'completed'
+            elif stage_date == today:
+                status = 'current'
+            else:
+                status = 'upcoming'
+            
+            if row['stage'] <= 7:
+                event = f"Этап {row['stage']}"
+            elif row['stage'] == 8:
+                event = "Полуфиналы"
+            elif row['stage'] == 9:
+                event = "Финал"
+            else:
+                event = row.get('description', '')
+            
+            calendar.append({
+                'date': stage_date.strftime('%d.%m'),
+                'event': event,
+                'status': status
+            })
+        
+        # Матчи для турнирной сетки
+        matches_data = supabase.table("matches")\
+            .select("*")\
+            .order("stage")\
+            .execute()
+        
+        matches_by_stage = {}
+        for m in matches_data.data:
+            stage_key = str(m['stage'])
+            if stage_key not in matches_by_stage:
+                matches_by_stage[stage_key] = []
+            matches_by_stage[stage_key].append({
+                'team1': m['team1_name'],
+                'team2': m['team2_name'],
+                'score1': m.get('team1_km', 0) or 0,
+                'score2': m.get('team2_km', 0) or 0,
+                'winner_id': m.get('winner_id')
+            })
+        
+        return jsonify({
+            'regions': {
+                'hmao': rating_data['regions']['hmao'],
+                'ynao': rating_data['regions']['ynao']
+            },
+            'top3': top3,
+            'men': men[:10],
+            'women': women[:10],
+            'teams': teams,
+            'calendar': calendar,
+            'matches': matches_by_stage
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка API rating: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ========== ЗАПУСК ==========
 
 if __name__ == "__main__":
