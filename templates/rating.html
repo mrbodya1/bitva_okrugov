@@ -599,47 +599,99 @@
         }
 
         // ========== ЛИЧНЫЙ ЗАЧЕТ ==========
+        let showAllPersonal = false;
+        let currentGender = 'men';
+        
         function renderPersonal() {
             const data = currentGender === 'men' ? (ratingData.men || []) : (ratingData.women || []);
-            const displayData = showAllPersonal ? data : data.slice(0, 5);
             const tbody = document.getElementById('personal-body');
+            const showMoreBtn = document.getElementById('show-more-personal');
             
-            if (displayData.length === 0) {
+            if (data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #a0a0c0;">Нет данных</td></tr>';
+                showMoreBtn.style.display = 'none';
                 return;
             }
             
-            tbody.innerHTML = displayData.map((p, idx) => `
-                <tr>
-                    <td>${showAllPersonal ? (idx + 1) : (idx + 1)}</td>
-                    <td>${p.first_name || ''} ${p.last_name || ''}</td>
-                    <td><span class="team-tag">${p.team_name || ''}</span></td>
-                    <td>${(p.total_km || 0).toFixed(1)}</td>
-                </tr>
-            `).join('');
+            const displayData = showAllPersonal ? data : data.slice(0, 10);
+            
+            tbody.innerHTML = displayData.map((p, idx) => {
+                const place = showAllPersonal ? (idx + 1) : (idx + 1);
+                return `
+                    <tr>
+                        <td>${place}</td>
+                        <td>${p.first_name || ''} ${p.last_name || ''}</td>
+                        <td><span class="team-tag">${p.team_name || ''}</span></td>
+                        <td>${(p.total_km || 0).toFixed(1)}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Обновляем кнопку
+            if (data.length > 10) {
+                showMoreBtn.style.display = 'block';
+                showMoreBtn.textContent = showAllPersonal ? 'Скрыть' : `Показать всех (${data.length})`;
+            } else {
+                showMoreBtn.style.display = 'none';
+            }
         }
+        
+        // Обработчик кнопки
+        document.getElementById('show-more-personal').addEventListener('click', () => {
+            showAllPersonal = !showAllPersonal;
+            renderPersonal();
+        });
+        
+        // При смене пола сбрасываем флаг
+        document.querySelectorAll('.sub-tab').forEach(t => {
+            t.addEventListener('click', () => {
+                // ... существующий код ...
+                showAllPersonal = false;  // ← сбрасываем
+                renderPersonal();
+            });
+        });
 
         // ========== КОМАНДНЫЙ ЗАЧЕТ ==========
+        let showAllTeams = false;
+
         function renderTeams() {
             const data = ratingData.teams || [];
-            const displayData = showAllTeams ? data : data.slice(0, 8);
             const tbody = document.getElementById('teams-body');
+            const showMoreBtn = document.getElementById('show-more-teams');
             
-            if (displayData.length === 0) {
+            if (data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #a0a0c0;">Нет данных</td></tr>';
+                showMoreBtn.style.display = 'none';
                 return;
             }
             
-            tbody.innerHTML = displayData.map((t, idx) => `
-                <tr>
-                    <td>${showAllTeams ? (idx + 1) : (idx + 1)}</td>
-                    <td>${t.name || ''}</td>
-                    <td>${t.region || ''}</td>
-                    <td>${t.points || 0}</td>
-                    <td>${(t.total_km || 0).toFixed(1)}</td>
-                </tr>
-            `).join('');
+            const displayData = showAllTeams ? data : data.slice(0, 10);
+            
+            tbody.innerHTML = displayData.map((t, idx) => {
+                const place = showAllTeams ? (idx + 1) : (idx + 1);
+                return `
+                    <tr>
+                        <td>${place}</td>
+                        <td>${t.name || ''}</td>
+                        <td>${t.region || ''}</td>
+                        <td>${t.points || 0}</td>
+                        <td>${(t.total_km || 0).toFixed(1)}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            if (data.length > 10) {
+                showMoreBtn.style.display = 'block';
+                showMoreBtn.textContent = showAllTeams ? 'Скрыть' : `Показать всех (${data.length})`;
+            } else {
+                showMoreBtn.style.display = 'none';
+            }
         }
+        
+        document.getElementById('show-more-teams').addEventListener('click', () => {
+            showAllTeams = !showAllTeams;
+            renderTeams();
+        });
 
         // ========== КАЛЕНДАРЬ ==========
         function renderCalendar() {
