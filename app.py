@@ -767,19 +767,19 @@ def test_send_notification(event_key):
     
     # Пары финала
     elif event_key == "final_pairs":
-    semi_matches = get_stage_matches("semi")
-    winners, losers = [], []
-    for m in semi_matches:
-        if m.get("winner_id"):
-            if m["winner_id"] == m.get("team1_id"):
-                winners.append(m["team1_name"]); losers.append(m["team2_name"])
-            else:
-                winners.append(m["team2_name"]); losers.append(m["team1_name"])
-    if len(winners) >= 2 and len(losers) >= 2:
-        send_match_notification("final_pairs",
-            final_team1=winners[0], final_team2=winners[1],
-            third_team1=losers[0], third_team2=losers[1])
-        return "✅ Пары финала отправлены"
+        semi_matches = get_stage_matches("semi")
+        winners, losers = [], []
+        for m in semi_matches:
+            if m.get("winner_id"):
+                if m["winner_id"] == m.get("team1_id"):
+                    winners.append(m["team1_name"]); losers.append(m["team2_name"])
+                else:
+                    winners.append(m["team2_name"]); losers.append(m["team1_name"])
+        if len(winners) >= 2 and len(losers) >= 2:
+            send_match_notification("final_pairs",
+                final_team1=winners[0], final_team2=winners[1],
+                third_team1=losers[0], third_team2=losers[1])
+            return "✅ Пары финала отправлены"
     
     # Предварительные/окончательные финала
     elif event_key in ["final_preliminary", "final_final"]:
