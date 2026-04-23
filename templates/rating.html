@@ -754,7 +754,6 @@
             }).join('');
         }
 
-        // ========== ТУРНИРНАЯ СЕТКА (team vs team) ==========
         function renderBracket() {
             const container = document.getElementById('bracket-container');
             const matches = ratingData.matches || {};
@@ -778,11 +777,11 @@
                 return;
             }
             
-            // Рендерим вертикальные блоки:  team1   score1  🆚  score2   team2
             container.innerHTML = `<div class="bracket-vertical">` + stages.map(s => {
                 const matchesHtml = s.matches.map(m => {
-                    const t1win = m.winner_id && m.team1 === m.winner_id;
-                    const t2win = m.winner_id && m.team2 === m.winner_id;
+                    // Сравниваем winner_id с ID команд (числа)
+                    const t1win = m.winner_id && m.winner_id === m.team1_id;
+                    const t2win = m.winner_id && m.winner_id === m.team2_id;
                     const score1 = m.score1 > 0 ? m.score1.toFixed(1) : '-';
                     const score2 = m.score2 > 0 ? m.score2.toFixed(1) : '-';
                     
