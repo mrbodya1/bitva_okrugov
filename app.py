@@ -1034,7 +1034,7 @@ def api_rating():
         teams = get_team_rating()
         top3 = teams[:3] if len(teams) >= 3 else teams
         
-        # Личный зачет (мужчины и женщины)
+        # Личный зачет — ВСЕ участники
         all_participants = get_all_active_participants()
         men = [p for p in all_participants if p.get('gender') == 'М']
         women = [p for p in all_participants if p.get('gender') == 'Ж']
@@ -1049,7 +1049,6 @@ def api_rating():
             .execute()
         
         calendar = []
-        # Используем datetime.now() напрямую
         from datetime import datetime
         import pytz
         moscow_tz = pytz.timezone('Europe/Moscow')
@@ -1105,8 +1104,8 @@ def api_rating():
                 'ynao': rating_data['regions']['ynao']
             },
             'top3': top3,
-            'men': men[:10],
-            'women': women[:10],
+            'men': men,      # ← ВСЕ мужчины
+            'women': women,  # ← ВСЕ женщины
             'teams': teams,
             'calendar': calendar,
             'matches': matches_by_stage
