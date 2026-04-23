@@ -525,7 +525,7 @@
         </div>
     </div>
 
-        <script>
+            <script>
         // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
         let ratingData = null;
         let currentGender = 'men';
@@ -556,8 +556,8 @@
 
         // ========== БИТВА ОКРУГОВ ==========
         function renderBattle() {
-            const hmao = ratingData.regions.hmao || 0;
-            const ynao = ratingData.regions.ynao || 0;
+            const hmao = ratingData.regions?.hmao || 0;
+            const ynao = ratingData.regions?.ynao || 0;
             const total = hmao + ynao;
             const hmaoPct = total > 0 ? Math.round(hmao / total * 100) : 50;
             const ynaoPct = 100 - hmaoPct;
@@ -599,9 +599,6 @@
         }
 
         // ========== ЛИЧНЫЙ ЗАЧЕТ ==========
-        let showAllPersonal = false;
-        let currentGender = 'men';
-        
         function renderPersonal() {
             const data = currentGender === 'men' ? (ratingData.men || []) : (ratingData.women || []);
             const tbody = document.getElementById('personal-body');
@@ -627,7 +624,6 @@
                 `;
             }).join('');
             
-            // Обновляем кнопку
             if (data.length > 10) {
                 showMoreBtn.style.display = 'block';
                 showMoreBtn.textContent = showAllPersonal ? 'Скрыть' : `Показать всех (${data.length})`;
@@ -635,25 +631,8 @@
                 showMoreBtn.style.display = 'none';
             }
         }
-        
-        // Обработчик кнопки
-        document.getElementById('show-more-personal').addEventListener('click', () => {
-            showAllPersonal = !showAllPersonal;
-            renderPersonal();
-        });
-        
-        // При смене пола сбрасываем флаг
-        document.querySelectorAll('.sub-tab').forEach(t => {
-            t.addEventListener('click', () => {
-                // ... существующий код ...
-                showAllPersonal = false;  // ← сбрасываем
-                renderPersonal();
-            });
-        });
 
         // ========== КОМАНДНЫЙ ЗАЧЕТ ==========
-        let showAllTeams = false;
-
         function renderTeams() {
             const data = ratingData.teams || [];
             const tbody = document.getElementById('teams-body');
@@ -687,11 +666,6 @@
                 showMoreBtn.style.display = 'none';
             }
         }
-        
-        document.getElementById('show-more-teams').addEventListener('click', () => {
-            showAllTeams = !showAllTeams;
-            renderTeams();
-        });
 
         // ========== КАЛЕНДАРЬ ==========
         function renderCalendar() {
@@ -793,17 +767,16 @@
                 });
             });
 
-            // Показать еще
+            // Кнопка "Показать еще" для личного зачета
             document.getElementById('show-more-personal').addEventListener('click', () => {
                 showAllPersonal = !showAllPersonal;
                 renderPersonal();
-                document.getElementById('show-more-personal').textContent = showAllPersonal ? 'Скрыть' : 'Показать еще';
             });
 
+            // Кнопка "Показать еще" для команд
             document.getElementById('show-more-teams').addEventListener('click', () => {
                 showAllTeams = !showAllTeams;
                 renderTeams();
-                document.getElementById('show-more-teams').textContent = showAllTeams ? 'Скрыть' : 'Показать еще';
             });
 
             // Загружаем данные
